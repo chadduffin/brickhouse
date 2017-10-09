@@ -1,0 +1,4 @@
+*.o
+secrets/*
+server/server
+client/client
