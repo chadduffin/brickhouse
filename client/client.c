@@ -22,7 +22,7 @@ int create_socket(int port) {
 	hints.ai_flags = 0;
 	hints.ai_protocol = 0;
 
-	if ((s = getaddrinfo("localhost", "5555", &hints, &result)) != 0 ) {
+	if ((s = getaddrinfo("localhost", "30000", &hints, &result)) != 0 ) {
 		printf("getaddrinfo\n");
 		exit(1);
 	}
