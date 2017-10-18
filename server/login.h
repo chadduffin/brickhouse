@@ -9,20 +9,26 @@
 
 #ifdef __linux__
   #include <arpa/inet.h>
+  #include <sys/time.h>
   #include <sys/types.h>
   #include <sys/socket.h>
+  #include <sys/select.h>
   #include <openssl/ssl.h>
   #include <openssl/err.h>
 #elif __APPLE__
   #include <arpa/inet.h>
+  #include <sys/time.h>
   #include <sys/types.h>
   #include <sys/socket.h>
+  #include <sys/select.h>
   #include <openssl/ssl.h>
   #include <openssl/err.h>
 #elif __unix__
   #include <arpa/inet.h>
+  #include <sys/time.h>
   #include <sys/types.h>
   #include <sys/socket.h>
+  #include <sys/select.h>
   #include <openssl/ssl.h>
   #include <openssl/err.h>
 #elif _WIN32
@@ -41,9 +47,25 @@ struct b_listener {
   SSL_CTX *ctx;
 };
 
+struct b_list_entry {
+  int key;
+  void *data;
+  struct b_list_entry *next;
+};
+
+struct b_list {
+  int max;
+  struct b_list_entry *head, *tail;
+};
+
 struct b_connection {
   int s;
   SSL *ssl;
+};
+
+struct b_connection_set {
+  fd_set fds;
+  struct b_list list;
 };
 
 /* initialization */
@@ -59,5 +81,16 @@ void b_cleanup_openssl(void);
 /* the magic */
 struct b_connection* b_open_connection(void);
 void b_close_connection(struct b_connection **connection);
+int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len);
+
+void b_list_add(struct b_list *list, void *data, int key);
+void b_list_remove(struct b_list *list, int key);
+struct b_list_entry* b_list_find(struct b_list *list, int key);
+
+int b_connection_set_handle(struct b_connection_set *set, unsigned int ready);
+int b_connection_set_select(struct b_connection_set *set, unsigned int milliseconds);
+void b_connection_set_add(struct b_connection_set *set, struct b_connection *connection);
+void b_connection_set_remove(struct b_connection_set *set, struct b_connection *connection);
+void b_connection_set_refresh(struct b_connection_set *set);
 
 #endif /* __LOGIN__ */

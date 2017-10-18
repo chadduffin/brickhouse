@@ -2,16 +2,20 @@
 #include "globals.h"
 
 int main(int argc, char **argv) {
-  const char buffer[] = { "hello" };
-
   b_initialize();
 
   while (1) {
-    struct b_connection *connection = b_open_connection();
-    
-    SSL_write(connection->ssl, buffer, sizeof(buffer)+1);
+    int ready = 0;
 
-    b_close_connection(&connection);
+    if ((ready = b_connection_set_select(&connections, 2000)) == -1) {
+      perror("b_connection_set_select\n");
+      exit(1);
+    } else if ((ready > 0) && (b_connection_set_handle(&connections, ready) == -1)) {
+      perror("b_connection_set_handle\n");
+      exit(1);
+    }
+
+    b_connection_set_refresh(&connections);
   }
 
   b_cleanup();

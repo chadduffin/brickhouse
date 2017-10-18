@@ -4,14 +4,15 @@
 // INITIALIZATION //
 
 void b_initialize(void) {
+  FD_ZERO(&(connections.fds));
+
   b_initialize_socket();
   b_initialize_openssl();
 }
 
 void b_initialize_socket(void) {
-  struct addrinfo
-    hints,
-    *result;
+  struct addrinfo hints, *result;
+  struct b_connection *connection;
 
   memset(&hints, 0, sizeof(struct addrinfo));
   hints.ai_family = AF_INET;
@@ -45,6 +46,13 @@ void b_initialize_socket(void) {
 		close(listener.s);
 		exit(1);
 	}
+
+  connection = (struct b_connection*)malloc(sizeof(struct b_connection));
+
+  connection->s = listener.s;
+  connection->ssl = NULL;
+
+  b_connection_set_add(&connections, connection);
 }
 
 void b_initialize_openssl(void) {
@@ -80,6 +88,8 @@ void b_initialize_openssl(void) {
 void b_cleanup(void) {
   b_cleanup_socket();
   b_cleanup_openssl();
+
+  FD_ZERO(&(connections.fds));
 }
 
 void b_cleanup_socket(void) {
@@ -105,18 +115,149 @@ struct b_connection* b_open_connection(void) {
 
   if (!connection->ssl) {
     perror("SSL_new\n");
+    close(connection->s);
     exit(1);
   }
 
-  SSL_set_fd(connection->ssl, connection->s);
+  if (!SSL_set_fd(connection->ssl, connection->s)) {
+    perror("SSL_set_fd\n");
+    SSL_free(connection->ssl);
+    exit(1);
+  }
   
-  SSL_accept(connection->ssl);
+  if (!SSL_accept(connection->ssl)) {
+    perror("SSL_accept\n");
+    SSL_free(connection->ssl);
+    close(connection->s);
+    exit(1);
+  }
+
+  b_connection_set_add(&connections, connection);
   
   return connection;
 }
 
 void b_close_connection(struct b_connection **connection) {
+  b_connection_set_remove(&connections, *connection);
   SSL_free((*connection)->ssl);
   close((*connection)->s);
   free((*connection));
+
+  *connection = NULL;
+}
+
+int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len) {
+  return SSL_write(connection->ssl, buf, len);
+}
+
+void b_list_add(struct b_list *list, void *data, int key) {
+  struct b_list_entry *entry = (struct b_list_entry*)malloc(sizeof(struct b_list_entry)), *indirect = entry;
+
+  entry->key = key;
+  entry->data = data;
+  entry->next = list->head;
+
+  while ((indirect->next) && (indirect->next->key < key)) {
+    indirect = indirect->next;
+  }
+
+  entry->next = indirect->next;
+
+  if (indirect->next == list->head) {
+    list->head = entry;
+  } else {
+    indirect->next = entry; 
+  }
+
+  list->max = (list->max > key) ? list->max : key;
+}
+
+void b_list_remove(struct b_list *list, int key) {
+  int max = -1;
+  struct b_list_entry *entry, **indirect;
+
+  if (!list->head) {
+    return;
+  }
+
+  indirect = &(list->head);
+
+  while ((*indirect)->key != key) {
+    max = (*indirect)->key;
+    indirect = &((*indirect)->next);
+
+    if (!(*indirect)) {
+      return;
+    }
+  }
+
+  if (list->max == key) {
+    list->max = max;
+  }
+ 
+  entry = *indirect;
+
+  *indirect = entry->next;
+
+  free(entry);
+}
+
+struct b_list_entry* b_list_find(struct b_list *list, int key) {
+  struct b_list_entry *head = list->head;
+
+  while (head) {
+    if (head->key == key) {
+      break;
+    }
+    
+    head = head->next;
+  }
+
+  return head;
+}
+
+int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
+  struct b_connection *connection = b_open_connection();
+
+  b_write_connection(connection, "hello", 5);
+
+  b_close_connection(&connection);
+
+  return 1;
+}
+
+int b_connection_set_select(struct b_connection_set *set, unsigned int milliseconds) {
+  struct timeval tv;
+
+  tv.tv_sec = milliseconds/1000;
+  tv.tv_usec = (milliseconds%1000)*1000;
+
+  return select(set->list.max+1, &(set->fds), NULL, NULL, &tv);
+}
+
+void b_connection_set_add(struct b_connection_set *set, struct b_connection *connection) {
+  b_list_add(&(set->list), (void*)connection, connection->s);
+
+  FD_SET(connection->s, &(set->fds));
+}
+
+void b_connection_set_remove(struct b_connection_set *set, struct b_connection *connection) {
+  b_list_remove(&(set->list), connection->s);
+
+  FD_CLR(connection->s, &(set->fds));
+}
+
+void b_connection_set_refresh(struct b_connection_set *set) {
+  struct b_list_entry *entry = set->list.head;
+  struct b_connection *connection;
+
+  FD_ZERO(&(set->fds));
+
+  while (entry) {
+    connection = (struct b_connection*)(entry->data);
+
+    FD_SET(connection->s, &(set->fds));
+
+    entry = entry->next;
+  }
 }

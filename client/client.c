@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
 
   configure_context(ctx);
 
-  sock = create_socket(5555);
+  sock = create_socket(30000);
 
   ssl = SSL_new(ctx);
 

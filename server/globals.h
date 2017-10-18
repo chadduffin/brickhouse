@@ -29,5 +29,6 @@
 #endif
 
 extern struct b_listener listener;
+extern struct b_connection_set connections;
 
 #endif /* __GLOBALS__ */
