@@ -41,6 +41,8 @@
 #define HOSTNAME    "localhost"
 #define MAXPENDING  32
 
+#define BUFSIZE     1024
+
 struct b_listener {
   int s;
   struct addrinfo *rp;
@@ -60,6 +62,7 @@ struct b_list {
 
 struct b_connection {
   int s;
+  char buffer[BUFSIZE+1];
   SSL *ssl;
 };
 
@@ -81,6 +84,7 @@ void b_cleanup_openssl(void);
 /* the magic */
 struct b_connection* b_open_connection(void);
 void b_close_connection(struct b_connection **connection);
+int b_read_connection(struct b_connection *connection, char *buf);
 int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len);
 
 void b_list_add(struct b_list *list, void *data, int key);

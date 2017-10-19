@@ -146,6 +146,10 @@ void b_close_connection(struct b_connection **connection) {
   *connection = NULL;
 }
 
+int b_read_connection(struct b_connection *connection, char *buf) {
+  return SSL_read(connection->ssl, buf, BUFSIZE);
+}
+
 int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len) {
   return SSL_write(connection->ssl, buf, len);
 }
@@ -217,11 +221,42 @@ struct b_list_entry* b_list_find(struct b_list *list, int key) {
 }
 
 int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
-  struct b_connection *connection = b_open_connection();
+  int s;
+  struct b_connection *connection;
+  struct b_list_entry *entry = set->list.head;
 
-  b_write_connection(connection, "hello", 5);
+  if (FD_ISSET(listener.s, &(set->fds))) {
+    connection = b_open_connection();
 
-  b_close_connection(&connection);
+    b_write_connection(connection, "You are now connected.\n", 23);
+    
+    FD_CLR(listener.s, &(set->fds));
+
+    ready -= 1;
+  }
+
+  while (entry) {
+    connection = (struct b_connection*)(entry->data);
+
+    entry = entry->next;
+
+    if (FD_ISSET(connection->s, &(set->fds))) {
+      FD_CLR(connection->s, &(set->fds));
+
+      if ((s = b_read_connection(connection, connection->buffer)) > 0) {
+        connection->buffer[BUFSIZE] = 0;
+        printf("%s\n", connection->buffer);
+      } else if (s < 0) {
+        perror("b_read_connection\n");
+        exit(1);
+      } else if (!s) {
+        printf("connection %i closed.\n", connection->s);
+        b_close_connection(&connection);
+      }
+
+      ready -= 1;
+    }
+  }
 
   return 1;
 }

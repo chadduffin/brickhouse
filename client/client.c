@@ -113,6 +113,10 @@ int main(int argc, char **argv) {
     printf("%s\n", buff);
   }
 
+  SSL_write(ssl, "Hello!\0", 7);
+
+  sleep(10+rand()%10);
+
   close(sock);
   SSL_free(ssl);
   SSL_CTX_free(ctx);
