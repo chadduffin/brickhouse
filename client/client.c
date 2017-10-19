@@ -1,6 +1,7 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -115,7 +116,7 @@ int main(int argc, char **argv) {
 
   SSL_write(ssl, "Hello!\0", 7);
 
-  sleep(10+rand()%10);
+  sleep(atoi(argv[1]));
 
   close(sock);
   SSL_free(ssl);

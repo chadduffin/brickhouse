@@ -34,13 +34,14 @@
 #elif _WIN32
 #endif
 
-#define KEYPATH     "../secrets/key.pem"
-#define CERTPATH    "../secrets/cert.pem"
+#define KEYPATH     "../../secrets/key.pem"
+#define CERTPATH    "../../secrets/cert.pem"
 
 #define PORT        "30000"
 #define HOSTNAME    "localhost"
 #define MAXPENDING  32
 
+#define TIMEOUT     5
 #define BUFSIZE     1024
 
 struct b_listener {
@@ -63,6 +64,7 @@ struct b_list {
 struct b_connection {
   int s;
   char buffer[BUFSIZE+1];
+  struct timeval tv;
   SSL *ssl;
 };
 
@@ -91,8 +93,8 @@ void b_list_add(struct b_list *list, void *data, int key);
 void b_list_remove(struct b_list *list, int key);
 struct b_list_entry* b_list_find(struct b_list *list, int key);
 
+int b_connection_set_select(struct b_connection_set *set);
 int b_connection_set_handle(struct b_connection_set *set, unsigned int ready);
-int b_connection_set_select(struct b_connection_set *set, unsigned int milliseconds);
 void b_connection_set_add(struct b_connection_set *set, struct b_connection *connection);
 void b_connection_set_remove(struct b_connection_set *set, struct b_connection *connection);
 void b_connection_set_refresh(struct b_connection_set *set);

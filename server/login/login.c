@@ -132,6 +132,8 @@ struct b_connection* b_open_connection(void) {
     exit(1);
   }
 
+  gettimeofday(&(connection->tv), NULL);
+
   b_connection_set_add(&connections, connection);
   
   return connection;
@@ -220,10 +222,22 @@ struct b_list_entry* b_list_find(struct b_list *list, int key) {
   return head;
 }
 
+int b_connection_set_select(struct b_connection_set *set) {
+  struct timeval tv;
+
+  tv.tv_sec = 2;
+  tv.tv_usec = 0;
+
+  return select(set->list.max+1, &(set->fds), NULL, NULL, &tv);
+}
+
 int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
   int s;
+  struct timeval tv;
   struct b_connection *connection;
   struct b_list_entry *entry = set->list.head;
+
+  gettimeofday(&tv, NULL);
 
   if (FD_ISSET(listener.s, &(set->fds))) {
     connection = b_open_connection();
@@ -231,8 +245,6 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
     b_write_connection(connection, "You are now connected.\n", 23);
     
     FD_CLR(listener.s, &(set->fds));
-
-    ready -= 1;
   }
 
   while (entry) {
@@ -253,21 +265,13 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
         printf("connection %i closed.\n", connection->s);
         b_close_connection(&connection);
       }
-
-      ready -= 1;
+    } else if ((connection->s != listener.s) && (connection->tv.tv_sec+TIMEOUT < tv.tv_sec)) {
+      printf("connection %i timed out.\n", connection->s);
+      b_close_connection(&connection);
     }
   }
 
   return 1;
-}
-
-int b_connection_set_select(struct b_connection_set *set, unsigned int milliseconds) {
-  struct timeval tv;
-
-  tv.tv_sec = milliseconds/1000;
-  tv.tv_usec = (milliseconds%1000)*1000;
-
-  return select(set->list.max+1, &(set->fds), NULL, NULL, &tv);
 }
 
 void b_connection_set_add(struct b_connection_set *set, struct b_connection *connection) {
