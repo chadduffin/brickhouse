@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ocsp.h>
 #include <openssl/x509v3.h>
 
 int create_socket(int port) {
@@ -83,11 +84,40 @@ void configure_context(SSL_CTX *ctx) {
   SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION);
 }
 
+int ocsp_resp_cb(SSL *s, void *arg) {
+  const unsigned char *p;
+  int len;
+  OCSP_RESPONSE *rsp;
+  len = SSL_get_tlsext_status_ocsp_resp(s, &p);
+  BIO_puts(arg, "OCSP response: ");
+  if (!p) {
+    BIO_puts(arg, "no response sent\n");
+    return 1;
+  }
+
+  rsp = d2i_OCSP_RESPONSE(NULL, &p, len);
+
+  if (!rsp) {
+    BIO_puts(arg, "response parse error\n");
+    BIO_dump_indent(arg, (char *)p, len, 4);
+    return 0;
+  }
+
+  BIO_puts(arg, "\n======================================\n");
+  OCSP_RESPONSE_print(arg, rsp, 0);
+  BIO_puts(arg, "======================================\n");
+  OCSP_RESPONSE_free(rsp);
+
+  return 1;
+}
+
 int main(int argc, char **argv) {
   int sock;
   SSL *ssl;
   SSL_CTX *ctx;
   X509_VERIFY_PARAM *param = NULL;
+
+  BIO *arg = BIO_new_fp(stdout,BIO_NOCLOSE);
 
   init_openssl();
   ctx = create_context();
@@ -103,6 +133,11 @@ int main(int argc, char **argv) {
   X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
   X509_VERIFY_PARAM_set1_host(param, "", 0);
 
+  // Online Certificate Status Protocol
+  SSL_set_tlsext_status_type(ssl, TLSEXT_STATUSTYPE_ocsp);
+  SSL_CTX_set_tlsext_status_cb(ctx, ocsp_resp_cb);
+  SSL_CTX_set_tlsext_status_arg(ctx, arg);
+
   SSL_set_fd(ssl, sock);
   if (SSL_connect(ssl) <= 0) {
     ERR_print_errors_fp(stderr);
@@ -114,7 +149,7 @@ int main(int argc, char **argv) {
     printf("%s\n", buff);
   }
 
-  SSL_write(ssl, "Hello!\0", 7);
+  SSL_write(ssl, "username\0password", 17);
 
   sleep(atoi(argv[1]));
 
