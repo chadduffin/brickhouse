@@ -237,16 +237,13 @@ int b_connection_set_select(struct b_connection_set *set) {
 
 int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
   int s;
-  struct timeval tv;
   struct b_connection *connection;
   struct b_list_entry *entry = set->list.head;
-
-  gettimeofday(&tv, NULL);
 
   if (FD_ISSET(listener.s, &(set->fds))) {
     connection = b_open_connection();
 
-    b_write_connection(connection, "You are now connected.\n", 23);
+    b_write_connection(connection, "welcome", 7);
     
     FD_CLR(listener.s, &(set->fds));
 
@@ -273,9 +270,6 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       }
 
       ready -= 1;
-    } else if ((connection->s != listener.s) && (connection->tv.tv_sec+TIMEOUT < tv.tv_sec)) {
-      printf("connection %i timed out.\n", connection->s);
-      b_close_connection(&connection);
     }
   }
 
@@ -295,16 +289,24 @@ void b_connection_set_remove(struct b_connection_set *set, struct b_connection *
 }
 
 void b_connection_set_refresh(struct b_connection_set *set) {
+  struct timeval tv;
   struct b_list_entry *entry = set->list.head;
   struct b_connection *connection;
+
+  gettimeofday(&tv, NULL);
 
   FD_ZERO(&(set->fds));
 
   while (entry) {
     connection = (struct b_connection*)(entry->data);
 
-    FD_SET(connection->s, &(set->fds));
-
     entry = entry->next;
+
+    if ((connection->s != listener.s) && (connection->tv.tv_sec+TIMEOUT < tv.tv_sec)) {
+      printf("connection %i timed out.\n", connection->s);
+      b_close_connection(&connection);
+    } else {
+      FD_SET(connection->s, &(set->fds));
+    }
   }
 }

@@ -6,6 +6,8 @@ int main(int argc, char **argv) {
 
   client.chat = b_open_connection(LOGIN_HOSTNAME, LOGIN_PORT);
 
+  sleep(20);
+
   b_client_select();
 
   b_client_handle();

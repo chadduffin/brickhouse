@@ -30,6 +30,8 @@ void b_initialize_openssl(void) {
   SSL_CTX_set_options(client.ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION);
 }
 
+// CLEANUP //
+
 void b_cleanup(void) {
   if (client.chat) {
     b_close_connection(&(client.chat));
@@ -47,6 +49,8 @@ void b_cleanup_openssl(void) {
   SSL_CTX_free(client.ctx);
   EVP_cleanup();
 }
+
+// THE MAGIC //
 
 struct b_connection* b_open_connection(const char *hostname, const char *port) {
   struct b_connection *connection = (struct b_connection*)malloc(sizeof(struct b_connection));
