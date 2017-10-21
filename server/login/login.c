@@ -3,11 +3,32 @@
 
 // INITIALIZATION //
 
-void b_initialize(void) {
+void b_initialize(int argc, char **argv) {
+  if (argc < 4) {
+    perror("argv\n");
+    exit(1);
+  }
+
   FD_ZERO(&(connections.fds));
 
+  b_initialize_mysql(argv);
   b_initialize_socket();
   b_initialize_openssl();
+}
+
+void b_initialize_mysql(char **argv) {
+  mysql.con = mysql_init(NULL);
+
+  if (!mysql.con) {
+    fprintf(stderr, "mysql_init: %s\n", mysql_error(mysql.con));
+    exit(1);
+  }
+
+  if (!mysql_real_connect(mysql.con, argv[1], argv[2], argv[3], NULL, 0, NULL, 0)) {
+    fprintf(stderr, "mysql_real_connect: %s\n", mysql_error(mysql.con));
+    mysql_close(mysql.con);
+    exit(1);
+  }
 }
 
 void b_initialize_socket(void) {
@@ -98,6 +119,10 @@ void b_cleanup(void) {
   b_cleanup_openssl();
 
   FD_ZERO(&(connections.fds));
+}
+
+void b_cleanup_mysql(void) {
+  mysql_close(mysql.con);
 }
 
 void b_cleanup_openssl(void) {

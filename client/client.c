@@ -126,14 +126,6 @@ int b_write_connection(struct b_connection *connection, const char *buf, unsigne
   return SSL_write(connection->ssl, buf, len);
 }
 
-void b_close_connection(struct b_connection **connection) {
-  SSL_free((*connection)->ssl);
-  close((*connection)->s);
-  free((*connection));
-
-  *connection = NULL;
-}
-
 int b_client_select(void) {
   int max = -1;
   struct timeval tv;
@@ -149,7 +141,7 @@ int b_client_select(void) {
     max = (max > client.game->s) ? max : client.game->s;
   }
 
-  return select(max+1, &(client.fds), NULL, NULL, &tv);
+  return (max == -1) ? -1 : select(max+1, &(client.fds), NULL, NULL, &tv);
 }
 
 int b_client_handle(void) {
@@ -198,6 +190,14 @@ int b_client_refresh(void) {
   }
 
   return 0;
+}
+
+void b_close_connection(struct b_connection **connection) {
+  SSL_free((*connection)->ssl);
+  close((*connection)->s);
+  free((*connection));
+
+  *connection = NULL;
 }
 
 int ocsp_resp_cb(SSL *s, void *arg) {

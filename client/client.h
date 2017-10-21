@@ -71,10 +71,10 @@ struct b_connection* b_open_connection(const char *hostname, const char *port);
 int b_open_socket(const char *hostname, const char *port);
 int b_read_connection(struct b_connection *connection, char *buf);
 int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len);
-void b_close_connection(struct b_connection **connection);
 int b_client_select(void);
 int b_client_handle(void);
 int b_client_refresh(void);
+void b_close_connection(struct b_connection **connection);
 
 int ocsp_resp_cb(SSL *s, void *arg);
 

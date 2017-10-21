@@ -1,6 +1,7 @@
 #ifndef __LOGIN__
 #define __LOGIN__
 
+#include <mysql.h>
 #include <netdb.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -24,6 +25,11 @@
 
 #define TIMEOUT     5
 #define BUFSIZE     1024
+
+struct b_mysql {
+  MYSQL *con;
+  MYSQL_RES *result;
+};
 
 struct b_listener {
   int s;
@@ -55,12 +61,14 @@ struct b_connection_set {
 };
 
 /* initialization */
-void b_initialize(void);
+void b_initialize(int argc, char **argv);
+void b_initialize_mysql(char **argv);
 void b_initialize_socket(void);
 void b_initialize_openssl(void);
 
 /* cleanup */
 void b_cleanup(void);
+void b_cleanup_mysql(void);
 void b_cleanup_openssl(void);
 
 /* the magic */
