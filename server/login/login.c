@@ -53,6 +53,8 @@ void b_initialize_socket(void) {
   connection->ssl = NULL;
 
   b_connection_set_add(&connections, connection);
+
+	freeaddrinfo(result);
 }
 
 void b_initialize_openssl(void) {
@@ -86,14 +88,16 @@ void b_initialize_openssl(void) {
 // CLEANUP //
 
 void b_cleanup(void) {
-  b_cleanup_socket();
+  struct b_list_entry *entry = connections.list.head;
+  
+  while (entry) {
+    b_close_connection((struct b_connection**)(&(entry->data)));
+    entry = connections.list.head;
+  }
+
   b_cleanup_openssl();
 
   FD_ZERO(&(connections.fds));
-}
-
-void b_cleanup_socket(void) {
-  close(listener.s);
 }
 
 void b_cleanup_openssl(void) {
@@ -245,9 +249,11 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
     b_write_connection(connection, "You are now connected.\n", 23);
     
     FD_CLR(listener.s, &(set->fds));
+
+    ready -= 1;
   }
 
-  while (entry) {
+  while ((entry) && (ready)) {
     connection = (struct b_connection*)(entry->data);
 
     entry = entry->next;
@@ -265,13 +271,15 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
         printf("connection %i closed.\n", connection->s);
         b_close_connection(&connection);
       }
+
+      ready -= 1;
     } else if ((connection->s != listener.s) && (connection->tv.tv_sec+TIMEOUT < tv.tv_sec)) {
       printf("connection %i timed out.\n", connection->s);
       b_close_connection(&connection);
     }
   }
 
-  return 1;
+  return 0;
 }
 
 void b_connection_set_add(struct b_connection_set *set, struct b_connection *connection) {

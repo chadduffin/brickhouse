@@ -7,32 +7,13 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#ifdef __linux__
-  #include <arpa/inet.h>
-  #include <sys/time.h>
-  #include <sys/types.h>
-  #include <sys/socket.h>
-  #include <sys/select.h>
-  #include <openssl/ssl.h>
-  #include <openssl/err.h>
-#elif __APPLE__
-  #include <arpa/inet.h>
-  #include <sys/time.h>
-  #include <sys/types.h>
-  #include <sys/socket.h>
-  #include <sys/select.h>
-  #include <openssl/ssl.h>
-  #include <openssl/err.h>
-#elif __unix__
-  #include <arpa/inet.h>
-  #include <sys/time.h>
-  #include <sys/types.h>
-  #include <sys/socket.h>
-  #include <sys/select.h>
-  #include <openssl/ssl.h>
-  #include <openssl/err.h>
-#elif _WIN32
-#endif
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 #define KEYPATH     "../../secrets/key.pem"
 #define CERTPATH    "../../secrets/cert.pem"
@@ -80,7 +61,6 @@ void b_initialize_openssl(void);
 
 /* cleanup */
 void b_cleanup(void);
-void b_cleanup_socket(void);
 void b_cleanup_openssl(void);
 
 /* the magic */

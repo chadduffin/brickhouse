@@ -1,30 +1,91 @@
-#include <netdb.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/ocsp.h>
-#include <openssl/x509v3.h>
+#include "client.h"
+#include "globals.h"
 
-int create_socket(int port) {
+// INITIALIZATION //
+
+void b_initialize(void) {
+  FD_ZERO(&(client.fds));
+
+  b_initialize_openssl();
+}
+
+void b_initialize_openssl(void) {
+  const SSL_METHOD *method;
+
+  SSL_load_error_strings();	
+  OpenSSL_add_ssl_algorithms();
+
+  method = TLSv1_2_client_method();
+
+  client.ctx = SSL_CTX_new(method);
+
+  if (!client.ctx) {
+    perror("SSL_CTX_net\n");
+    exit(1);
+  }
+
+  SSL_CTX_set_verify(client.ctx, SSL_VERIFY_PEER, NULL);
+  SSL_CTX_set_verify_depth(client.ctx, 1);
+  SSL_CTX_load_verify_locations(client.ctx, "/usr/local/etc/openssl/cert.pem", "/usr/local/etc/openssl/");
+  SSL_CTX_set_options(client.ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION);
+}
+
+void b_cleanup(void) {
+  if (client.chat) {
+    b_close_connection(&(client.chat));
+  }
+  if (client.game) {
+    b_close_connection(&(client.game));
+  }
+
+  b_cleanup_openssl();
+
+  FD_ZERO(&(client.fds));
+}
+
+void b_cleanup_openssl(void) {
+  SSL_CTX_free(client.ctx);
+  EVP_cleanup();
+}
+
+struct b_connection* b_open_connection(const char *hostname, const char *port) {
+  struct b_connection *connection = (struct b_connection*)malloc(sizeof(struct b_connection));
+  X509_VERIFY_PARAM *param;
+  BIO *arg = BIO_new_fp(stdout, BIO_NOCLOSE);
+
+  connection->s = b_open_socket(hostname, port);
+
+  connection->ssl = SSL_new(client.ctx);
+
+  param = SSL_get0_param(connection->ssl);
+
+  X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+  X509_VERIFY_PARAM_set1_host(param, "", 0);
+
+  // Online Certificate Status Protocol
+  SSL_set_tlsext_status_type(connection->ssl, TLSEXT_STATUSTYPE_ocsp);
+  SSL_CTX_set_tlsext_status_cb(client.ctx, ocsp_resp_cb);
+  SSL_CTX_set_tlsext_status_arg(client.ctx, arg);
+
+  SSL_set_fd(connection->ssl, connection->s);
+
+  if (SSL_connect(connection->ssl) <= 0) {
+    perror("SSL_connect\n");
+    exit(1);
+  }
+
+  return connection;
+}
+
+int b_open_socket(const char *hostname, const char *port) {
   int s;
-	struct addrinfo
-    hints,
-    *result,
-    *rp;
+	struct addrinfo hints, *result, *rp;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = 0;
-	hints.ai_protocol = 0;
 
-	if ((s = getaddrinfo("localhost", "30000", &hints, &result)) != 0 ) {
+	if ((s = getaddrinfo(hostname, port, &hints, &result))) {
 		printf("getaddrinfo\n");
 		exit(1);
 	}
@@ -42,46 +103,97 @@ int create_socket(int port) {
 	}
 
 	if (!rp) {
-		perror("stream-talk-client: connect");
+		perror("connect");
 		exit(1);
 	}
+
+  FD_SET(s, &(client.fds));
 
 	freeaddrinfo(result);
 
   return s;
 }
 
-void init_openssl() { 
-  SSL_load_error_strings();	
-  OpenSSL_add_ssl_algorithms();
+int b_read_connection(struct b_connection *connection, char *buf) {
+  return SSL_read(connection->ssl, buf, BUFSIZE);
 }
 
-void cleanup_openssl() {
-  EVP_cleanup();
+int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len) {
+  return SSL_write(connection->ssl, buf, len);
 }
 
-SSL_CTX *create_context() {
-  const SSL_METHOD *method;
-  SSL_CTX *ctx;
+void b_close_connection(struct b_connection **connection) {
+  SSL_free((*connection)->ssl);
+  close((*connection)->s);
+  free((*connection));
 
-  method = TLSv1_2_client_method();
+  *connection = NULL;
+}
 
-  ctx = SSL_CTX_new(method);
+int b_client_select(void) {
+  int max = -1;
+  struct timeval tv;
 
-  if (!ctx) {
-    perror("Unable to create SSL context");
-    ERR_print_errors_fp(stderr);
-    exit(EXIT_FAILURE);
+  tv.tv_sec = 2;
+  tv.tv_usec = 0;
+
+  if (client.chat) {
+    max = client.chat->s;
   }
 
-  return ctx;
+  if (client.game) {
+    max = (max > client.game->s) ? max : client.game->s;
+  }
+
+  return select(max+1, &(client.fds), NULL, NULL, &tv);
 }
 
-void configure_context(SSL_CTX *ctx) {
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
-  SSL_CTX_set_verify_depth(ctx, 1);
-  SSL_CTX_load_verify_locations(ctx, "/usr/local/etc/openssl/cert.pem", "/usr/local/etc/openssl/");
-  SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION);
+int b_client_handle(void) {
+  int s;
+
+  if ((client.chat)  && (FD_ISSET(client.chat->s, &(client.fds)))) {
+    if ((s = b_read_connection(client.chat, client.chat->buffer)) < 0) {
+      perror("b_read_connection\n");
+      exit(1);
+    } else if (s == 0) {
+      printf("Connection with chat server closed.\n");
+      b_close_connection(&(client.chat));
+    } else {
+      printf("%s", client.chat->buffer);
+    }
+
+    FD_CLR(client.chat->s, &(client.fds));
+  }
+
+  if ((client.game)  && (FD_ISSET(client.game->s, &(client.fds)))) {
+    if ((s = b_read_connection(client.game, client.game->buffer)) < 0) {
+      perror("b_read_connection\n");
+      exit(1);
+    } else if (s == 0) {
+      printf("Connection with game server closed.\n");
+      b_close_connection(&(client.game));
+    } else {
+      printf("%s", client.game->buffer);
+    }
+
+    FD_CLR(client.game->s, &(client.fds));
+  }
+
+  return 0;
+}
+
+int b_client_refresh(void) {
+  FD_ZERO(&(client.fds));
+
+  if (client.chat) {
+    FD_SET(client.chat->s, &(client.fds));
+  }
+  
+  if (client.game) {
+    FD_SET(client.game->s, &(client.fds));
+  }
+
+  return 0;
 }
 
 int ocsp_resp_cb(SSL *s, void *arg) {
@@ -109,52 +221,4 @@ int ocsp_resp_cb(SSL *s, void *arg) {
   OCSP_RESPONSE_free(rsp);
 
   return 1;
-}
-
-int main(int argc, char **argv) {
-  int sock;
-  SSL *ssl;
-  SSL_CTX *ctx;
-  X509_VERIFY_PARAM *param = NULL;
-
-  BIO *arg = BIO_new_fp(stdout,BIO_NOCLOSE);
-
-  init_openssl();
-  ctx = create_context();
-
-  configure_context(ctx);
-
-  sock = create_socket(30000);
-
-  ssl = SSL_new(ctx);
-
-  param = SSL_get0_param(ssl);
-
-  X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
-  X509_VERIFY_PARAM_set1_host(param, "", 0);
-
-  // Online Certificate Status Protocol
-  SSL_set_tlsext_status_type(ssl, TLSEXT_STATUSTYPE_ocsp);
-  SSL_CTX_set_tlsext_status_cb(ctx, ocsp_resp_cb);
-  SSL_CTX_set_tlsext_status_arg(ctx, arg);
-
-  SSL_set_fd(ssl, sock);
-  if (SSL_connect(ssl) <= 0) {
-    ERR_print_errors_fp(stderr);
-  } else {
-    char buff[256];
-    memset(buff, 0, sizeof(buff));
-    SSL_read(ssl, buff, 255);
-    buff[255] = '\0';
-    printf("%s\n", buff);
-  }
-
-  SSL_write(ssl, "username\0password", 17);
-
-  sleep(atoi(argv[1]));
-
-  close(sock);
-  SSL_free(ssl);
-  SSL_CTX_free(ctx);
-  cleanup_openssl();
 }
