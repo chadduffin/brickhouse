@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include <arpa/inet.h>
 #include <sys/time.h>
@@ -67,6 +68,7 @@ void b_initialize_socket(void);
 void b_initialize_openssl(void);
 
 /* cleanup */
+void b_exit(void);
 void b_cleanup(void);
 void b_cleanup_mysql(void);
 void b_cleanup_openssl(void);
@@ -76,6 +78,7 @@ struct b_connection* b_open_connection(void);
 void b_close_connection(struct b_connection **connection);
 int b_read_connection(struct b_connection *connection, char *buf);
 int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len);
+int b_verify_connection(struct b_connection *connection);
 
 void b_list_add(struct b_list *list, void *data, int key);
 void b_list_remove(struct b_list *list, int key);
@@ -86,5 +89,10 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready);
 void b_connection_set_add(struct b_connection_set *set, struct b_connection *connection);
 void b_connection_set_remove(struct b_connection_set *set, struct b_connection *connection);
 void b_connection_set_refresh(struct b_connection_set *set);
+
+void b_prompt(void);
+void b_mysql_query(const char *query);
+void b_signal_handler(int signal);
+void b_command_handler(const char *command);
 
 #endif /* __LOGIN__ */

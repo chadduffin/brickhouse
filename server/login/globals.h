@@ -16,6 +16,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#define TITLE " __         ______     ______     __     __   __    \n/\\ \\       /\\  __ \\   /\\  ___\\   /\\ \\   /\\ \"-.\\ \\   \n\\ \\ \\____  \\ \\ \\/\\ \\  \\ \\ \\__ \\  \\ \\ \\  \\ \\ \\-.  \\  \n \\ \\_____\\  \\ \\_____\\  \\ \\_____\\  \\ \\_\\  \\ \\_\\\\\"\\_\\ \n  \\/_____/   \\/_____/   \\/_____/   \\/_/   \\/_/ \\/_/"
+
 extern struct b_mysql mysql;
 extern struct b_listener listener;
 extern struct b_connection_set connections;

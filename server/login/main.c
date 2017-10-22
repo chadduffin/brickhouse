@@ -3,7 +3,7 @@
 
 int main(int argc, char **argv) {
   b_initialize(argc, argv);
-  
+
   while (1) {
     int ready = 0;
 

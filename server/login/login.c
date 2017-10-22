@@ -6,14 +6,21 @@
 void b_initialize(int argc, char **argv) {
   if (argc < 4) {
     perror("argv\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
+  printf("%s\n\nLogin Server v0.0.1 Oct 21 2017\n\n", TITLE);
+
   FD_ZERO(&(connections.fds));
+
+  FD_SET(STDIN_FILENO, &(connections.fds));
 
   b_initialize_mysql(argv);
   b_initialize_socket();
   b_initialize_openssl();
+  b_prompt();
+
+  signal(SIGINT, b_signal_handler);
 }
 
 void b_initialize_mysql(char **argv) {
@@ -21,14 +28,20 @@ void b_initialize_mysql(char **argv) {
 
   if (!mysql.con) {
     fprintf(stderr, "mysql_init: %s\n", mysql_error(mysql.con));
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
-  if (!mysql_real_connect(mysql.con, argv[1], argv[2], argv[3], NULL, 0, NULL, 0)) {
+  if (!mysql_real_connect(mysql.con, argv[1], argv[2], argv[3], "brickhouse", 0, NULL, 0)) {
     fprintf(stderr, "mysql_real_connect: %s\n", mysql_error(mysql.con));
     mysql_close(mysql.con);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
+
+  /*
+    b_mysql_query("CREATE DATABASE brickhouse");
+    b_mysql_query("CREATE TABLE accounts(Id INT PRIMARY KEY AUTO_INCREMENT, Email Text, Password Text)");
+    b_mysql_query("INSERT INTO accounts(Email, Password) VALUES(\"test@test.com\", \"test\")");
+  */
 }
 
 void b_initialize_socket(void) {
@@ -41,8 +54,8 @@ void b_initialize_socket(void) {
   hints.ai_flags = AI_PASSIVE;
   
   if ((listener.s = getaddrinfo(NULL, PORT, &hints, &result)) != 0) {
-    perror("getaddrlistener\n");
-    exit(1);
+    perror("getaddrinfo\n");
+    exit(EXIT_FAILURE);
   }
 
 	for (listener.rp = result; listener.rp; listener.rp = listener.rp->ai_next) {
@@ -59,13 +72,13 @@ void b_initialize_socket(void) {
 
 	if (!listener.rp) {
 		perror("bind\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	if (listen(listener.s, MAXPENDING) == -1) {
 		perror("listen\n");
 		close(listener.s);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
   connection = (struct b_connection*)malloc(sizeof(struct b_connection));
@@ -74,8 +87,6 @@ void b_initialize_socket(void) {
   connection->ssl = NULL;
 
   b_connection_set_add(&connections, connection);
-
-	freeaddrinfo(result);
 }
 
 void b_initialize_openssl(void) {
@@ -90,23 +101,28 @@ void b_initialize_openssl(void) {
 
   if (!listener.ctx) {
     perror("SSL_CTX_new\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   SSL_CTX_set_ecdh_auto(listener.ctx, 1);
 
   if (SSL_CTX_use_PrivateKey_file(listener.ctx, KEYPATH, SSL_FILETYPE_PEM) <= 0) {
     perror("SSL_CTX_use_PrivateKey_file\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   if (SSL_CTX_use_certificate_file(listener.ctx, CERTPATH, SSL_FILETYPE_PEM) <= 0) {
     perror("SSL_CTX_use_certificate_file\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 }
 
 // CLEANUP //
+
+void b_exit(void) {
+  b_cleanup();
+  exit(EXIT_SUCCESS);
+}
 
 void b_cleanup(void) {
   struct b_list_entry *entry = connections.list.head;
@@ -126,6 +142,7 @@ void b_cleanup_mysql(void) {
 }
 
 void b_cleanup_openssl(void) {
+	freeaddrinfo(listener.rp);
   SSL_CTX_free(listener.ctx);
   EVP_cleanup();
 }
@@ -137,7 +154,7 @@ struct b_connection* b_open_connection(void) {
 
   if ((connection->s = accept(listener.s, listener.rp->ai_addr, &(listener.rp->ai_addrlen))) < 0) {
     perror("accept\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   
   connection->ssl = SSL_new(listener.ctx);
@@ -145,20 +162,23 @@ struct b_connection* b_open_connection(void) {
   if (!connection->ssl) {
     perror("SSL_new\n");
     close(connection->s);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   if (!SSL_set_fd(connection->ssl, connection->s)) {
     perror("SSL_set_fd\n");
     SSL_free(connection->ssl);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
+
+  printf("connection->s = %i\n", connection->s);
+  printf("connection->ssl = %s\n", (connection->ssl) ? "!NULL" : "NULL");
   
   if (!SSL_accept(connection->ssl)) {
     perror("SSL_accept\n");
     SSL_free(connection->ssl);
     close(connection->s);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   gettimeofday(&(connection->tv), NULL);
@@ -170,7 +190,11 @@ struct b_connection* b_open_connection(void) {
 
 void b_close_connection(struct b_connection **connection) {
   b_connection_set_remove(&connections, *connection);
-  SSL_free((*connection)->ssl);
+
+  if ((*connection)->ssl) {
+    SSL_free((*connection)->ssl);
+  }
+
   close((*connection)->s);
   free((*connection));
 
@@ -183,6 +207,38 @@ int b_read_connection(struct b_connection *connection, char *buf) {
 
 int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len) {
   return SSL_write(connection->ssl, buf, len);
+}
+
+int b_verify_connection(struct b_connection *connection) {
+  char *query;
+  unsigned int e_len, p_len;
+
+  e_len = strlen(connection->buffer);
+  p_len = strlen(connection->buffer+e_len);
+
+  query = (char*)malloc(sizeof(char)*(e_len+p_len+54));
+
+  sprintf(query, "SELECT * FROM accounts WHERE Email=\"%s\" AND Password=\"%s\"", connection->buffer, connection->buffer+e_len+1); 
+
+  printf("%s\n", query);
+  
+  b_mysql_query(query);
+
+  MYSQL_RES *result = mysql_store_result(mysql.con);
+
+  if (result == NULL) {
+    printf("not found\n");
+
+    return 1;
+  } else {
+    MYSQL_ROW row = mysql_fetch_row(result);
+
+    printf("%s\n", row[0]);
+
+    mysql_free_result(result);
+  }
+
+  return 0;
 }
 
 void b_list_add(struct b_list *list, void *data, int key) {
@@ -208,7 +264,7 @@ void b_list_add(struct b_list *list, void *data, int key) {
 }
 
 void b_list_remove(struct b_list *list, int key) {
-  int max = -1;
+  int max = 0;
   struct b_list_entry *entry, **indirect;
 
   if (!list->head) {
@@ -262,17 +318,24 @@ int b_connection_set_select(struct b_connection_set *set) {
 
 int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
   int s;
+  char buffer[BUFSIZE+1];
   struct b_connection *connection;
   struct b_list_entry *entry = set->list.head;
 
   if (FD_ISSET(listener.s, &(set->fds))) {
     connection = b_open_connection();
 
-    b_write_connection(connection, "welcome", 7);
-    
     FD_CLR(listener.s, &(set->fds));
 
     ready -= 1;
+  }
+
+  if (FD_ISSET(STDIN_FILENO, &(set->fds))) {
+    fgets(buffer, BUFSIZE, stdin);
+
+    buffer[strcspn(buffer, "\n\r")] = 0;
+
+    b_command_handler(buffer);
   }
 
   while ((entry) && (ready)) {
@@ -285,10 +348,15 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
 
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
-        printf("%s\n", connection->buffer);
+
+        if (!b_verify_connection(connection)) {
+          b_write_connection(connection, "logged in\0", 10);
+        }
+
+        b_close_connection(&connection);
       } else if (s < 0) {
         perror("b_read_connection\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       } else if (!s) {
         printf("connection %i closed.\n", connection->s);
         b_close_connection(&connection);
@@ -322,6 +390,8 @@ void b_connection_set_refresh(struct b_connection_set *set) {
 
   FD_ZERO(&(set->fds));
 
+  FD_SET(STDIN_FILENO, &(set->fds));
+
   while (entry) {
     connection = (struct b_connection*)(entry->data);
 
@@ -334,4 +404,29 @@ void b_connection_set_refresh(struct b_connection_set *set) {
       FD_SET(connection->s, &(set->fds));
     }
   }
+}
+
+void b_prompt(void) {
+  printf("login$ ");
+  fflush(stdout);
+}
+
+void b_mysql_query(const char *query) {
+  if (mysql_query(mysql.con, query)) {
+    fprintf(stderr, "mysql_query: %s\n", mysql_error(mysql.con));
+    exit(EXIT_FAILURE);
+  }
+}
+
+void b_signal_handler(int signal) {
+  perror("b_signal_handler\n");
+  b_exit();
+}
+
+void b_command_handler(const char *command) {
+  if (!strcmp(command, "exit")) {
+    b_exit();
+  }
+
+  b_prompt();
 }
