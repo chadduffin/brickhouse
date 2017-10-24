@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include <arpa/inet.h>
 #include <sys/time.h>
@@ -17,6 +18,8 @@
 #include <openssl/err.h>
 
 #define TITLE " __         ______     ______     __     __   __    \n/\\ \\       /\\  __ \\   /\\  ___\\   /\\ \\   /\\ \"-.\\ \\   \n\\ \\ \\____  \\ \\ \\/\\ \\  \\ \\ \\__ \\  \\ \\ \\  \\ \\ \\-.  \\  \n \\ \\_____\\  \\ \\_____\\  \\ \\_____\\  \\ \\_\\  \\ \\_\\\\\"\\_\\ \n  \\/_____/   \\/_____/   \\/_____/   \\/_/   \\/_/ \\/_/"
+
+extern struct sigaction action;
 
 extern struct b_mysql mysql;
 extern struct b_listener listener;

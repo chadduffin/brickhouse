@@ -11,9 +11,7 @@ int main(int argc, char **argv) {
   b_client_select();
 
   b_client_handle();
-
-  b_close_connection(&(client.chat));
-
+  
   b_cleanup();
 
   return 0;

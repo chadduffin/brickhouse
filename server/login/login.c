@@ -9,7 +9,7 @@ void b_initialize(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  printf("%s\n\nLogin Server v0.0.1 Oct 21 2017\n\n", TITLE);
+  printf("%s\n\n", TITLE);
 
   FD_ZERO(&(connections.fds));
 
@@ -20,7 +20,8 @@ void b_initialize(int argc, char **argv) {
   b_initialize_openssl();
   b_prompt();
 
-  signal(SIGINT, b_signal_handler);
+  action.sa_handler = b_signal_handler;
+  sigaction(SIGINT, &action, NULL);
 }
 
 void b_initialize_mysql(char **argv) {
@@ -39,8 +40,8 @@ void b_initialize_mysql(char **argv) {
 
   /*
     b_mysql_query("CREATE DATABASE brickhouse");
-    b_mysql_query("CREATE TABLE accounts(Id INT PRIMARY KEY AUTO_INCREMENT, Email Text, Password Text)");
-    b_mysql_query("INSERT INTO accounts(Email, Password) VALUES(\"test@test.com\", \"test\")");
+    b_mysql_query("CREATE TABLE accounts(Id INT PRIMARY KEY AUTO_INCREMENT, Email TEXT, Password TEXT, Token TEXT)");
+    b_mysql_query("INSERT INTO accounts(Email, Password, Token) VALUES(\"test@test.com\", \"test\", \"MLLd6rSBqH35BjlMnSjLIGIWHEbmrhwRqe2HmskBr4lhNbBKVH3Q9IrjttE4q6w0\")");
   */
 }
 
@@ -134,6 +135,8 @@ void b_cleanup(void) {
 
   b_cleanup_openssl();
 
+  mysql_close(mysql.con);
+
   FD_ZERO(&(connections.fds));
 }
 
@@ -171,19 +174,13 @@ struct b_connection* b_open_connection(void) {
     exit(EXIT_FAILURE);
   }
 
-  printf("connection->s = %i\n", connection->s);
-  printf("connection->ssl = %s\n", (connection->ssl) ? "!NULL" : "NULL");
-  
-  if (!SSL_accept(connection->ssl)) {
-    perror("SSL_accept\n");
-    SSL_free(connection->ssl);
-    close(connection->s);
-    exit(EXIT_FAILURE);
+  if (SSL_accept(connection->ssl)) {
+    gettimeofday(&(connection->tv), NULL);
+
+    b_connection_set_add(&connections, connection);
+  } else {
+    b_close_connection(&connection);
   }
-
-  gettimeofday(&(connection->tv), NULL);
-
-  b_connection_set_add(&connections, connection);
   
   return connection;
 }
@@ -210,13 +207,11 @@ int b_write_connection(struct b_connection *connection, const char *buf, unsigne
 }
 
 int b_verify_connection(struct b_connection *connection) {
-  char *query;
+  char query[BUFSIZE+1];
   unsigned int e_len, p_len;
 
   e_len = strlen(connection->buffer);
   p_len = strlen(connection->buffer+e_len);
-
-  query = (char*)malloc(sizeof(char)*(e_len+p_len+54));
 
   sprintf(query, "SELECT * FROM accounts WHERE Email=\"%s\" AND Password=\"%s\"", connection->buffer, connection->buffer+e_len+1); 
 
@@ -231,9 +226,12 @@ int b_verify_connection(struct b_connection *connection) {
 
     return 1;
   } else {
+    int i;
     MYSQL_ROW row = mysql_fetch_row(result);
 
-    printf("%s\n", row[0]);
+    for (i = 0; i < mysql_num_fields(result); i++) {
+      printf("%s\n", row[i]);
+    }
 
     mysql_free_result(result);
   }
@@ -336,6 +334,10 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
     buffer[strcspn(buffer, "\n\r")] = 0;
 
     b_command_handler(buffer);
+
+    FD_CLR(STDIN_FILENO, &(set->fds));
+
+    ready -= 1;
   }
 
   while ((entry) && (ready)) {
@@ -351,6 +353,8 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
 
         if (!b_verify_connection(connection)) {
           b_write_connection(connection, "logged in\0", 10);
+        } else {
+          b_write_connection(connection, "err\0", 4);
         }
 
         b_close_connection(&connection);
@@ -426,6 +430,8 @@ void b_signal_handler(int signal) {
 void b_command_handler(const char *command) {
   if (!strcmp(command, "exit")) {
     b_exit();
+  } else if (!strcmp(command, "version")) {
+    printf("Login 0.0.1 October 21 2017\n");
   }
 
   b_prompt();

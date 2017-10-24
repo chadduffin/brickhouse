@@ -17,8 +17,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define KEYPATH     "../../secrets/key.pem"
-#define CERTPATH    "../../secrets/cert.pem"
+#define KEYPATH     "/Users/chadduffin/Desktop/GitHub/brickhouse/secrets/key.pem"
+#define CERTPATH    "/Users/chadduffin/Desktop/GitHub/brickhouse/secrets/cert.pem"
 
 #define PORT        "30000"
 #define HOSTNAME    "localhost"

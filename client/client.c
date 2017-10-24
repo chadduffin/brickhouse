@@ -6,6 +6,9 @@
 void b_initialize(void) {
   FD_ZERO(&(client.fds));
 
+  client.chat = NULL;
+  client.game = NULL;
+
   b_initialize_openssl();
 }
 
@@ -26,7 +29,7 @@ void b_initialize_openssl(void) {
 
   SSL_CTX_set_verify(client.ctx, SSL_VERIFY_PEER, NULL);
   SSL_CTX_set_verify_depth(client.ctx, 1);
-  SSL_CTX_load_verify_locations(client.ctx, "/usr/local/etc/openssl/cert.pem", "/usr/local/etc/openssl/");
+  SSL_CTX_load_verify_locations(client.ctx, "../secrets/cert.pem", "../secrets/");
   SSL_CTX_set_options(client.ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION);
 }
 
@@ -147,7 +150,7 @@ int b_client_select(void) {
 int b_client_handle(void) {
   int s;
 
-  if ((client.chat)  && (FD_ISSET(client.chat->s, &(client.fds)))) {
+  if ((client.chat) && (FD_ISSET(client.chat->s, &(client.fds)))) {
     if ((s = b_read_connection(client.chat, client.chat->buffer)) < 0) {
       perror("b_read_connection\n");
       exit(1);
@@ -161,7 +164,7 @@ int b_client_handle(void) {
     FD_CLR(client.chat->s, &(client.fds));
   }
 
-  if ((client.game)  && (FD_ISSET(client.game->s, &(client.fds)))) {
+  if ((client.game) && (FD_ISSET(client.game->s, &(client.fds)))) {
     if ((s = b_read_connection(client.game, client.game->buffer)) < 0) {
       perror("b_read_connection\n");
       exit(1);
@@ -193,7 +196,14 @@ int b_client_refresh(void) {
 }
 
 void b_close_connection(struct b_connection **connection) {
-  SSL_free((*connection)->ssl);
+  if ((!connection) || (!(*connection))) {
+    return;
+  }
+
+  if ((*connection)->ssl) {
+    SSL_free((*connection)->ssl);
+  }
+
   close((*connection)->s);
   free((*connection));
 
