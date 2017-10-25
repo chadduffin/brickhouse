@@ -227,6 +227,10 @@ int b_verify_connection(struct b_connection *connection) {
   e_len = strlen(connection->buffer);
   p_len = strlen(connection->buffer+e_len);
 
+  if (!b_verify_email(connection->buffer)) {
+    return 0;
+  }
+
   snprintf(query, BUFSIZE, "SELECT * FROM accounts WHERE Email=\"%s\" AND Password=\"%s\"", connection->buffer, connection->buffer+e_len+1); 
 
   b_mysql_query(query);
@@ -238,10 +242,26 @@ int b_verify_connection(struct b_connection *connection) {
 
     mysql_free_result(result);
 
+    return 1;
+  }
+
+  return 0;
+}
+
+int b_verify_email(const char *email) {
+  regex_t regex;
+  const char *pattern = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$";
+
+  if (regcomp(&regex, pattern, REG_EXTENDED)) {
+    perror("regcomp\n");
     return 0;
   }
 
-  return 1;
+  return !regexec(&regex, email, 0, NULL, 0);
+}
+
+int b_verify_password(const char *password) {
+  return 0;
 }
 
 void b_list_add(struct b_list *list, void *data, int key) {
@@ -356,7 +376,7 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
 
-        if (b_verify_connection(connection)) {
+        if (!b_verify_connection(connection)) {
           b_write_connection(connection, 1, "err");
         }
 

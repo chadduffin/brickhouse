@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <regex.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -80,6 +81,8 @@ void b_close_connection(struct b_connection **connection);
 int b_read_connection(struct b_connection *connection, char *buf);
 int b_write_connection(struct b_connection *connection, int count, ...);
 int b_verify_connection(struct b_connection *connection);
+int b_verify_email(const char *email);
+int b_verify_password(const char *password);
 
 void b_list_add(struct b_list *list, void *data, int key);
 void b_list_remove(struct b_list *list, int key);
