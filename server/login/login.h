@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <stdarg.h>
 
 #include <arpa/inet.h>
 #include <sys/time.h>
@@ -77,7 +78,7 @@ void b_cleanup_openssl(void);
 struct b_connection* b_open_connection(void);
 void b_close_connection(struct b_connection **connection);
 int b_read_connection(struct b_connection *connection, char *buf);
-int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len);
+int b_write_connection(struct b_connection *connection, int count, ...);
 int b_verify_connection(struct b_connection *connection);
 
 void b_list_add(struct b_list *list, void *data, int key);

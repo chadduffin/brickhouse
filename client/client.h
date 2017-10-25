@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <stdarg.h>
 
 #ifdef __linux__
   #include <arpa/inet.h>
@@ -70,7 +72,7 @@ void b_cleanup_openssl(void);
 struct b_connection* b_open_connection(const char *hostname, const char *port);
 int b_open_socket(const char *hostname, const char *port);
 int b_read_connection(struct b_connection *connection, char *buf);
-int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len);
+int b_write_connection(struct b_connection *connection, int count, ...);
 int b_client_select(void);
 int b_client_handle(void);
 int b_client_refresh(void);

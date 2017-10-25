@@ -24,12 +24,12 @@ void b_initialize_openssl(void) {
 
   if (!client.ctx) {
     perror("SSL_CTX_net\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   SSL_CTX_set_verify(client.ctx, SSL_VERIFY_PEER, NULL);
   SSL_CTX_set_verify_depth(client.ctx, 1);
-  SSL_CTX_load_verify_locations(client.ctx, "../secrets/cert.pem", "../secrets/");
+  SSL_CTX_load_verify_locations(client.ctx, "../secrets/certifications", "../secrets/");
   SSL_CTX_set_options(client.ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION);
 }
 
@@ -78,7 +78,7 @@ struct b_connection* b_open_connection(const char *hostname, const char *port) {
 
   if (SSL_connect(connection->ssl) <= 0) {
     perror("SSL_connect\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   return connection;
@@ -94,7 +94,7 @@ int b_open_socket(const char *hostname, const char *port) {
 
 	if ((s = getaddrinfo(hostname, port, &hints, &result))) {
 		printf("getaddrinfo\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	for (rp = result; rp != NULL; rp = rp->ai_next) {
@@ -111,7 +111,7 @@ int b_open_socket(const char *hostname, const char *port) {
 
 	if (!rp) {
 		perror("connect");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
   FD_SET(s, &(client.fds));
@@ -125,8 +125,20 @@ int b_read_connection(struct b_connection *connection, char *buf) {
   return SSL_read(connection->ssl, buf, BUFSIZE);
 }
 
-int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len) {
-  return SSL_write(connection->ssl, buf, len);
+int b_write_connection(struct b_connection *connection, int count, ...) {
+  int i = 0, len = 0;
+  char buffer[BUFSIZE+1];
+  va_list list;
+
+  va_start(list, count); 
+  
+  for (i = 0; i < count; i += 1) {
+    len += 1+snprintf(buffer+len, BUFSIZE-len,"%s", va_arg(list, const char *));
+  }
+
+  va_end(list);
+
+  return SSL_write(connection->ssl, buffer, len);
 }
 
 int b_client_select(void) {
@@ -153,12 +165,12 @@ int b_client_handle(void) {
   if ((client.chat) && (FD_ISSET(client.chat->s, &(client.fds)))) {
     if ((s = b_read_connection(client.chat, client.chat->buffer)) < 0) {
       perror("b_read_connection\n");
-      exit(1);
+      exit(EXIT_FAILURE);
     } else if (s == 0) {
       printf("Connection with chat server closed.\n");
       b_close_connection(&(client.chat));
     } else {
-      printf("%s", client.chat->buffer);
+      printf("%s\n", client.chat->buffer);
     }
 
     FD_CLR(client.chat->s, &(client.fds));
@@ -167,12 +179,12 @@ int b_client_handle(void) {
   if ((client.game) && (FD_ISSET(client.game->s, &(client.fds)))) {
     if ((s = b_read_connection(client.game, client.game->buffer)) < 0) {
       perror("b_read_connection\n");
-      exit(1);
+      exit(EXIT_FAILURE);
     } else if (s == 0) {
       printf("Connection with game server closed.\n");
       b_close_connection(&(client.game));
     } else {
-      printf("%s", client.game->buffer);
+      printf("%s\n", client.game->buffer);
     }
 
     FD_CLR(client.game->s, &(client.fds));

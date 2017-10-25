@@ -32,7 +32,7 @@ void b_initialize_mysql(char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  if (!mysql_real_connect(mysql.con, argv[1], argv[2], argv[3], "brickhouse", 0, NULL, 0)) {
+  if (!mysql_real_connect(mysql.con, argv[1], argv[2], argv[3], "brickhouse", 3306, NULL, 0)) {
     fprintf(stderr, "mysql_real_connect: %s\n", mysql_error(mysql.con));
     mysql_close(mysql.con);
     exit(EXIT_FAILURE);
@@ -202,41 +202,46 @@ int b_read_connection(struct b_connection *connection, char *buf) {
   return SSL_read(connection->ssl, buf, BUFSIZE);
 }
 
-int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len) {
-  return SSL_write(connection->ssl, buf, len);
+int b_write_connection(struct b_connection *connection, int count, ...) {
+  int i = 0, len = 0;
+  char buffer[BUFSIZE+1];
+  va_list list;
+
+  va_start(list, count); 
+  
+  for (i = 0; i < count; i += 1) {
+    len += 1+snprintf(buffer+len, BUFSIZE-len,"%s", va_arg(list, const char *));
+  }
+
+  va_end(list);
+
+  return SSL_write(connection->ssl, buffer, len);
 }
 
 int b_verify_connection(struct b_connection *connection) {
   char query[BUFSIZE+1];
   unsigned int e_len, p_len;
+  MYSQL_ROW row;
+  MYSQL_RES *result;
 
   e_len = strlen(connection->buffer);
   p_len = strlen(connection->buffer+e_len);
 
-  sprintf(query, "SELECT * FROM accounts WHERE Email=\"%s\" AND Password=\"%s\"", connection->buffer, connection->buffer+e_len+1); 
+  snprintf(query, BUFSIZE, "SELECT * FROM accounts WHERE Email=\"%s\" AND Password=\"%s\"", connection->buffer, connection->buffer+e_len+1); 
 
-  printf("%s\n", query);
-  
   b_mysql_query(query);
 
-  MYSQL_RES *result = mysql_store_result(mysql.con);
+  result = mysql_store_result(mysql.con);
 
-  if (result == NULL) {
-    printf("not found\n");
-
-    return 1;
-  } else {
-    int i;
-    MYSQL_ROW row = mysql_fetch_row(result);
-
-    for (i = 0; i < mysql_num_fields(result); i++) {
-      printf("%s\n", row[i]);
-    }
+  if ((result) && (row = mysql_fetch_row(result))) {
+    b_write_connection(connection, 3, row[3], "255.255.255.255", "255.255.255.255");
 
     mysql_free_result(result);
+
+    return 0;
   }
 
-  return 0;
+  return 1;
 }
 
 void b_list_add(struct b_list *list, void *data, int key) {
@@ -351,10 +356,8 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
 
-        if (!b_verify_connection(connection)) {
-          b_write_connection(connection, "logged in\0", 10);
-        } else {
-          b_write_connection(connection, "err\0", 4);
+        if (b_verify_connection(connection)) {
+          b_write_connection(connection, 1, "err");
         }
 
         b_close_connection(&connection);
