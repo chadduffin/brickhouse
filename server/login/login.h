@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -97,6 +98,7 @@ void b_connection_set_refresh(struct b_connection_set *set);
 void b_prompt(void);
 void b_mysql_query(const char *query);
 void b_signal_handler(int signal);
-void b_command_handler(const char *command);
+void b_command_handler(char *command);
+void b_create_account(const char *email, const char *password, const char *salt);
 
 #endif /* __LOGIN__ */

@@ -40,8 +40,8 @@ void b_initialize_mysql(char **argv) {
 
   /*
     b_mysql_query("CREATE DATABASE brickhouse");
-    b_mysql_query("CREATE TABLE accounts(Id INT PRIMARY KEY AUTO_INCREMENT, Email TEXT, Password TEXT, Token TEXT)");
-    b_mysql_query("INSERT INTO accounts(Email, Password, Token) VALUES(\"test@test.com\", \"test\", \"MLLd6rSBqH35BjlMnSjLIGIWHEbmrhwRqe2HmskBr4lhNbBKVH3Q9IrjttE4q6w0\")");
+    b_mysql_query("CREATE TABLE accounts(Id INT PRIMARY KEY AUTO_INCREMENT, Email TEXT, Password TEXT, Salt TEXT, Token TEXT)");
+    b_mysql_query("INSERT INTO accounts(Email, Password, Salt, Token) VALUES(\"salt@test.com\", \"test\", \"wGlQBekQRsnp3l0wE8vyrqmJnlWZX37gk1D4s63S9jZwmORvugVJ19oeUn3H00BL\", \"MLLd6rSBqH35BjlMnSjLIGIWHEbmrhwRqe2HmskBr4lhNbBKVH3Q9IrjttE4q6w0\")");
   */
 }
 
@@ -219,7 +219,7 @@ int b_write_connection(struct b_connection *connection, int count, ...) {
 }
 
 int b_verify_connection(struct b_connection *connection) {
-  char query[BUFSIZE+1];
+  char query[BUFSIZE+1], digest[BUFSIZE+1], password[BUFSIZE+1];
   unsigned int e_len, p_len;
   MYSQL_ROW row;
   MYSQL_RES *result;
@@ -231,18 +231,29 @@ int b_verify_connection(struct b_connection *connection) {
     return 0;
   }
 
-  snprintf(query, BUFSIZE, "SELECT * FROM accounts WHERE Email=\"%s\" AND Password=\"%s\"", connection->buffer, connection->buffer+e_len+1); 
+  snprintf(query, BUFSIZE, "SELECT * FROM accounts WHERE Email=\"%s\";", connection->buffer); 
 
   b_mysql_query(query);
 
   result = mysql_store_result(mysql.con);
 
   if ((result) && (row = mysql_fetch_row(result))) {
-    b_write_connection(connection, 3, row[3], "255.255.255.255", "255.255.255.255");
+    char *salt = row[3];
 
-    mysql_free_result(result);
+    PKCS5_PBKDF2_HMAC(connection->buffer+e_len+1, strlen(connection->buffer+e_len+1), (unsigned char*)salt, 64, 4096, EVP_sha512(), 64, (unsigned char*)digest);
 
-    return 1;
+    p_len = mysql_real_escape_string(mysql.con, password, digest, 64);
+
+    password[p_len] = 0;
+
+    p_len = mysql_real_escape_string(mysql.con, digest, row[2], 64);
+
+    digest[p_len] = 0;
+
+    if (!strcmp(password, digest)) {
+      b_write_connection(connection, 3, row[4], "255.255.255.255", "255.255.255.255");
+      return 1;
+    }
   }
 
   return 0;
@@ -261,7 +272,15 @@ int b_verify_email(const char *email) {
 }
 
 int b_verify_password(const char *password) {
-  return 0;
+  regex_t regex;
+  const char *pattern = "^[a-zA-Z0-9]{64}$";
+
+  if (regcomp(&regex, pattern, REG_EXTENDED)) {
+    perror("regcomp\n");
+    return 0;
+  }
+
+  return !regexec(&regex, password, 0, NULL, 0);
 }
 
 void b_list_add(struct b_list *list, void *data, int key) {
@@ -450,12 +469,61 @@ void b_signal_handler(int signal) {
   b_exit();
 }
 
-void b_command_handler(const char *command) {
+void b_command_handler(char *command) {
+  int i, len, argc = 0;
+  char *begin = command;
+
   if (!strcmp(command, "exit")) {
     b_exit();
   } else if (!strcmp(command, "version")) {
     printf("Login 0.0.1 October 21 2017\n");
+  } else {
+    len = strlen(command); 
+
+    while (len > 0) {
+      i = strcspn(command, " ");
+
+      *(command+i) = 0;
+
+      command = command+i+1;
+
+      len -= i+1;
+
+      argc += 1;
+    }
+
+    if ((argc > 1) && (!strcmp(begin, "create"))) {
+      len = strlen(begin);
+
+      if ((argc == 5) && (!strcmp(begin+len+1, "account"))) {
+        char *email = begin+len+1+strlen(begin+len+1)+1,
+             *password = email+strlen(email)+1,
+             *salt = password+strlen(password)+1;
+        b_create_account(email, password, salt);
+      }
+    }
   }
 
   b_prompt();
+}
+
+void b_create_account(const char *email, const char *password, const char *salt) {
+  int len;
+  char query[BUFSIZE+1], digest[BUFSIZE+1], hashed_password[BUFSIZE+1];
+
+  if (!b_verify_email(email)) {
+    return;
+  }
+
+  PKCS5_PBKDF2_HMAC(password, strlen(password), (unsigned char*)salt, 64, 4096, EVP_sha512(), 64, (unsigned char*)digest);
+
+  len = mysql_real_escape_string(mysql.con, hashed_password, digest, 64);
+
+  hashed_password[len] = 0;
+
+  snprintf(query, BUFSIZE, "INSERT INTO accounts(Email, Password, Salt, Token) VALUES(\"%s\", \"%s\", \"%s\", \"%s\");", email, hashed_password, salt, salt); 
+
+  b_mysql_query(query);
+
+  return;
 }
