@@ -169,8 +169,6 @@ int b_client_handle(void) {
     } else if (s == 0) {
       printf("Connection with chat server closed.\n");
       b_close_connection(&(client.chat));
-    } else {
-      printf("%s\n", client.chat->buffer);
     }
 
     FD_CLR(client.chat->s, &(client.fds));
@@ -183,8 +181,6 @@ int b_client_handle(void) {
     } else if (s == 0) {
       printf("Connection with game server closed.\n");
       b_close_connection(&(client.game));
-    } else {
-      printf("%s\n", client.game->buffer);
     }
 
     FD_CLR(client.game->s, &(client.fds));
@@ -203,6 +199,28 @@ int b_client_refresh(void) {
   if (client.game) {
     FD_SET(client.game->s, &(client.fds));
   }
+
+  return 0;
+}
+
+int b_client_login(void) {
+  int i, j;
+  char email[64],
+       password[64];
+
+  scanf("%s", email);
+  scanf("%s", password);
+
+  b_write_connection(client.chat, 2, email, password);
+
+  b_client_select();
+
+  b_client_handle();
+
+  i = strlen(client.chat->buffer)+1;
+  j = strlen(client.chat->buffer+i)+i+1;
+
+  printf("Connect to %s:%s with token %s.\n", client.chat->buffer+i, client.chat->buffer+j, client.chat->buffer);
 
   return 0;
 }

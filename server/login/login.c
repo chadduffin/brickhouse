@@ -251,7 +251,7 @@ int b_verify_connection(struct b_connection *connection) {
     digest[p_len] = 0;
 
     if (!strcmp(password, digest)) {
-      b_write_connection(connection, 3, row[4], "255.255.255.255", "255.255.255.255");
+      b_write_connection(connection, 3, row[4], CHAT_HOSTNAME, CHAT_PORT);
       return 1;
     }
   }
@@ -269,18 +269,6 @@ int b_verify_email(const char *email) {
   }
 
   return !regexec(&regex, email, 0, NULL, 0);
-}
-
-int b_verify_password(const char *password) {
-  regex_t regex;
-  const char *pattern = "^[a-zA-Z0-9]{64}$";
-
-  if (regcomp(&regex, pattern, REG_EXTENDED)) {
-    perror("regcomp\n");
-    return 0;
-  }
-
-  return !regexec(&regex, password, 0, NULL, 0);
 }
 
 void b_list_add(struct b_list *list, void *data, int key) {

@@ -20,15 +20,18 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define KEYPATH     "/Users/chadduffin/Desktop/GitHub/brickhouse/secrets/key.pem"
-#define CERTPATH    "/Users/chadduffin/Desktop/GitHub/brickhouse/secrets/cert.pem"
+#define KEYPATH       "/Users/chadduffin/Desktop/GitHub/brickhouse/secrets/key.pem"
+#define CERTPATH      "/Users/chadduffin/Desktop/GitHub/brickhouse/secrets/cert.pem"
 
-#define PORT        "30000"
-#define HOSTNAME    "localhost"
-#define MAXPENDING  32
+#define PORT          "30000"
+#define HOSTNAME      "localhost"
+#define MAXPENDING    32
 
-#define TIMEOUT     5
-#define BUFSIZE     1024
+#define TIMEOUT       5
+#define BUFSIZE       1024
+
+#define CHAT_PORT     "30001"
+#define CHAT_HOSTNAME "localhost"
 
 struct b_mysql {
   MYSQL *con;
@@ -83,7 +86,6 @@ int b_read_connection(struct b_connection *connection, char *buf);
 int b_write_connection(struct b_connection *connection, int count, ...);
 int b_verify_connection(struct b_connection *connection);
 int b_verify_email(const char *email);
-int b_verify_password(const char *password);
 
 void b_list_add(struct b_list *list, void *data, int key);
 void b_list_remove(struct b_list *list, int key);

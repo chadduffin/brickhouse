@@ -76,6 +76,7 @@ int b_write_connection(struct b_connection *connection, int count, ...);
 int b_client_select(void);
 int b_client_handle(void);
 int b_client_refresh(void);
+int b_client_login(void);
 void b_close_connection(struct b_connection **connection);
 
 int ocsp_resp_cb(SSL *s, void *arg);
