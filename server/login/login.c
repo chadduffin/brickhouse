@@ -394,6 +394,7 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       } else if (!s) {
         printf("connection %i closed.\n", connection->s);
         b_close_connection(&connection);
+        prompt();
       }
 
       ready -= 1;
@@ -434,6 +435,7 @@ void b_connection_set_refresh(struct b_connection_set *set) {
     if ((connection->s != listener.s) && (connection->tv.tv_sec+TIMEOUT < tv.tv_sec)) {
       printf("connection %i timed out.\n", connection->s);
       b_close_connection(&connection);
+      prompt();
     } else {
       FD_SET(connection->s, &(set->fds));
     }

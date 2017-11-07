@@ -1,13 +1,21 @@
-#include "login.h"
+#include "chat.h"
 #include "globals.h"
 
 // INITIALIZATION //
 
-void b_initialize(void) {
+void b_initialize(int argc, char **argv) {
+  printf("%s\n\n", TITLE);
+
   FD_ZERO(&(connections.fds));
+
+  FD_SET(STDIN_FILENO, &(connections.fds));
 
   b_initialize_socket();
   b_initialize_openssl();
+  b_prompt();
+
+  action.sa_handler = b_signal_handler;
+  sigaction(SIGINT, &action, NULL);
 }
 
 void b_initialize_socket(void) {
@@ -20,8 +28,8 @@ void b_initialize_socket(void) {
   hints.ai_flags = AI_PASSIVE;
   
   if ((listener.s = getaddrinfo(NULL, PORT, &hints, &result)) != 0) {
-    perror("getaddrlistener\n");
-    exit(1);
+    perror("getaddrinfo\n");
+    exit(EXIT_FAILURE);
   }
 
 	for (listener.rp = result; listener.rp; listener.rp = listener.rp->ai_next) {
@@ -38,13 +46,13 @@ void b_initialize_socket(void) {
 
 	if (!listener.rp) {
 		perror("bind\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	if (listen(listener.s, MAXPENDING) == -1) {
 		perror("listen\n");
 		close(listener.s);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
   connection = (struct b_connection*)malloc(sizeof(struct b_connection));
@@ -67,36 +75,44 @@ void b_initialize_openssl(void) {
 
   if (!listener.ctx) {
     perror("SSL_CTX_new\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   SSL_CTX_set_ecdh_auto(listener.ctx, 1);
 
   if (SSL_CTX_use_PrivateKey_file(listener.ctx, KEYPATH, SSL_FILETYPE_PEM) <= 0) {
     perror("SSL_CTX_use_PrivateKey_file\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   if (SSL_CTX_use_certificate_file(listener.ctx, CERTPATH, SSL_FILETYPE_PEM) <= 0) {
     perror("SSL_CTX_use_certificate_file\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 }
 
 // CLEANUP //
 
+void b_exit(void) {
+  b_cleanup();
+  exit(EXIT_SUCCESS);
+}
+
 void b_cleanup(void) {
-  b_cleanup_socket();
+  struct b_list_entry *entry = connections.list.head;
+  
+  while (entry) {
+    b_close_connection((struct b_connection**)(&(entry->data)));
+    entry = connections.list.head;
+  }
+
   b_cleanup_openssl();
 
   FD_ZERO(&(connections.fds));
 }
 
-void b_cleanup_socket(void) {
-  close(listener.s);
-}
-
 void b_cleanup_openssl(void) {
+	freeaddrinfo(listener.rp);
   SSL_CTX_free(listener.ctx);
   EVP_cleanup();
 }
@@ -108,7 +124,7 @@ struct b_connection* b_open_connection(void) {
 
   if ((connection->s = accept(listener.s, listener.rp->ai_addr, &(listener.rp->ai_addrlen))) < 0) {
     perror("accept\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   
   connection->ssl = SSL_new(listener.ctx);
@@ -116,30 +132,33 @@ struct b_connection* b_open_connection(void) {
   if (!connection->ssl) {
     perror("SSL_new\n");
     close(connection->s);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   if (!SSL_set_fd(connection->ssl, connection->s)) {
     perror("SSL_set_fd\n");
     SSL_free(connection->ssl);
-    exit(1);
-  }
-  
-  if (!SSL_accept(connection->ssl)) {
-    perror("SSL_accept\n");
-    SSL_free(connection->ssl);
-    close(connection->s);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
-  b_connection_set_add(&connections, connection);
+  if (SSL_accept(connection->ssl)) {
+    gettimeofday(&(connection->tv), NULL);
+
+    b_connection_set_add(&connections, connection);
+  } else {
+    b_close_connection(&connection);
+  }
   
   return connection;
 }
 
 void b_close_connection(struct b_connection **connection) {
   b_connection_set_remove(&connections, *connection);
-  SSL_free((*connection)->ssl);
+
+  if ((*connection)->ssl) {
+    SSL_free((*connection)->ssl);
+  }
+
   close((*connection)->s);
   free((*connection));
 
@@ -150,8 +169,20 @@ int b_read_connection(struct b_connection *connection, char *buf) {
   return SSL_read(connection->ssl, buf, BUFSIZE);
 }
 
-int b_write_connection(struct b_connection *connection, const char *buf, unsigned int len) {
-  return SSL_write(connection->ssl, buf, len);
+int b_write_connection(struct b_connection *connection, int count, ...) {
+  int i = 0, len = 0;
+  char buffer[BUFSIZE+1];
+  va_list list;
+
+  va_start(list, count); 
+  
+  for (i = 0; i < count; i += 1) {
+    len += 1+snprintf(buffer+len, BUFSIZE-len,"%s", va_arg(list, const char *));
+  }
+
+  va_end(list);
+
+  return SSL_write(connection->ssl, buffer, len);
 }
 
 void b_list_add(struct b_list *list, void *data, int key) {
@@ -177,7 +208,7 @@ void b_list_add(struct b_list *list, void *data, int key) {
 }
 
 void b_list_remove(struct b_list *list, int key) {
-  int max = -1;
+  int max = 0;
   struct b_list_entry *entry, **indirect;
 
   if (!list->head) {
@@ -220,22 +251,42 @@ struct b_list_entry* b_list_find(struct b_list *list, int key) {
   return head;
 }
 
+int b_connection_set_select(struct b_connection_set *set) {
+  struct timeval tv;
+
+  tv.tv_sec = 2;
+  tv.tv_usec = 0;
+
+  return select(set->list.max+1, &(set->fds), NULL, NULL, &tv);
+}
+
 int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
   int s;
+  char buffer[BUFSIZE+1];
   struct b_connection *connection;
   struct b_list_entry *entry = set->list.head;
 
   if (FD_ISSET(listener.s, &(set->fds))) {
     connection = b_open_connection();
 
-    b_write_connection(connection, "You are now connected.\n", 23);
-    
     FD_CLR(listener.s, &(set->fds));
 
     ready -= 1;
   }
 
-  while (entry) {
+  if (FD_ISSET(STDIN_FILENO, &(set->fds))) {
+    fgets(buffer, BUFSIZE, stdin);
+
+    buffer[strcspn(buffer, "\n\r")] = 0;
+
+    b_command_handler(buffer);
+
+    FD_CLR(STDIN_FILENO, &(set->fds));
+
+    ready -= 1;
+  }
+
+  while ((entry) && (ready)) {
     connection = (struct b_connection*)(entry->data);
 
     entry = entry->next;
@@ -245,29 +296,22 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
 
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
-        printf("%s\n", connection->buffer);
+
+        b_write_connection(connection, 1, connection->buffer);
       } else if (s < 0) {
         perror("b_read_connection\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       } else if (!s) {
         printf("connection %i closed.\n", connection->s);
         b_close_connection(&connection);
+        prompt();
       }
 
       ready -= 1;
     }
   }
 
-  return 1;
-}
-
-int b_connection_set_select(struct b_connection_set *set, unsigned int milliseconds) {
-  struct timeval tv;
-
-  tv.tv_sec = milliseconds/1000;
-  tv.tv_usec = (milliseconds%1000)*1000;
-
-  return select(set->list.max+1, &(set->fds), NULL, NULL, &tv);
+  return 0;
 }
 
 void b_connection_set_add(struct b_connection_set *set, struct b_connection *connection) {
@@ -283,16 +327,57 @@ void b_connection_set_remove(struct b_connection_set *set, struct b_connection *
 }
 
 void b_connection_set_refresh(struct b_connection_set *set) {
+  struct timeval tv;
   struct b_list_entry *entry = set->list.head;
   struct b_connection *connection;
 
+  gettimeofday(&tv, NULL);
+
   FD_ZERO(&(set->fds));
+
+  FD_SET(STDIN_FILENO, &(set->fds));
 
   while (entry) {
     connection = (struct b_connection*)(entry->data);
 
-    FD_SET(connection->s, &(set->fds));
-
     entry = entry->next;
+
+    FD_SET(connection->s, &(set->fds));
   }
+}
+
+void b_prompt(void) {
+  printf("chat$ ");
+  fflush(stdout);
+}
+
+void b_signal_handler(int signal) {
+  perror("b_signal_handler\n");
+  b_exit();
+}
+
+void b_command_handler(char *command) {
+  int i, len, argc = 0;
+
+  if (!strcmp(command, "exit")) {
+    b_exit();
+  } else if (!strcmp(command, "version")) {
+    printf("Chat 0.0.1 November 7 2017\n");
+  } else {
+    len = strlen(command); 
+
+    while (len > 0) {
+      i = strcspn(command, " ");
+
+      *(command+i) = 0;
+
+      command = command+i+1;
+
+      len -= i+1;
+
+      argc += 1;
+    }
+  }
+
+  b_prompt();
 }

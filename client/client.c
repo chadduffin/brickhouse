@@ -206,7 +206,8 @@ int b_client_refresh(void) {
 int b_client_login(void) {
   int i, j;
   char email[64],
-       password[64];
+       password[64],
+       packet[32];
 
   scanf("%s", email);
   scanf("%s", password);
@@ -221,6 +222,22 @@ int b_client_login(void) {
   j = strlen(client.chat->buffer+i)+i+1;
 
   printf("Connect to %s:%s with token %s.\n", client.chat->buffer+i, client.chat->buffer+j, client.chat->buffer);
+
+  client.game = client.chat;
+
+  client.chat = b_open_connection(client.game->buffer+i, client.game->buffer+j);
+
+  b_close_connection(&(client.game));
+
+  scanf("%s", packet);
+
+  b_write_connection(client.chat, 1, packet);
+
+  b_client_select();
+
+  b_client_handle();
+
+  printf("%s\n", client.chat->buffer);
 
   return 0;
 }
