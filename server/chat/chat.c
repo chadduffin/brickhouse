@@ -304,7 +304,7 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       } else if (!s) {
         printf("connection %i closed.\n", connection->s);
         b_close_connection(&connection);
-        prompt();
+        b_prompt();
       }
 
       ready -= 1;

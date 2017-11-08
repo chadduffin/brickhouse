@@ -162,6 +162,16 @@ int b_client_select(void) {
 int b_client_handle(void) {
   int s;
 
+  if ((client.chat) && (FD_ISSET(STDIN_FILENO, &(client.fds)))) {
+    char buffer[32];
+
+    fgets(buffer, 32, stdin);
+    
+    b_write_connection(client.chat, 1, buffer);
+
+    FD_CLR(STDIN_FILENO, &(client.fds));
+  }
+
   if ((client.chat) && (FD_ISSET(client.chat->s, &(client.fds)))) {
     if ((s = b_read_connection(client.chat, client.chat->buffer)) < 0) {
       perror("b_read_connection\n");
@@ -169,6 +179,8 @@ int b_client_handle(void) {
     } else if (s == 0) {
       printf("Connection with chat server closed.\n");
       b_close_connection(&(client.chat));
+    } else {
+      printf("%s", client.chat->buffer);
     }
 
     FD_CLR(client.chat->s, &(client.fds));
@@ -192,6 +204,8 @@ int b_client_handle(void) {
 int b_client_refresh(void) {
   FD_ZERO(&(client.fds));
 
+  FD_SET(STDIN_FILENO, &(client.fds));
+
   if (client.chat) {
     FD_SET(client.chat->s, &(client.fds));
   }
@@ -206,8 +220,7 @@ int b_client_refresh(void) {
 int b_client_login(void) {
   int i, j;
   char email[64],
-       password[64],
-       packet[32];
+       password[64];
 
   scanf("%s", email);
   scanf("%s", password);
@@ -228,16 +241,6 @@ int b_client_login(void) {
   client.chat = b_open_connection(client.game->buffer+i, client.game->buffer+j);
 
   b_close_connection(&(client.game));
-
-  scanf("%s", packet);
-
-  b_write_connection(client.chat, 1, packet);
-
-  b_client_select();
-
-  b_client_handle();
-
-  printf("%s\n", client.chat->buffer);
 
   return 0;
 }
