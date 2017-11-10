@@ -180,7 +180,7 @@ int b_client_handle(void) {
       printf("Connection with chat server closed.\n");
       b_close_connection(&(client.chat));
     } else {
-      printf("%s", client.chat->buffer);
+      printf("%s\n", client.chat->buffer);
     }
 
     FD_CLR(client.chat->s, &(client.fds));
@@ -234,7 +234,7 @@ int b_client_login(void) {
   i = strlen(client.chat->buffer)+1;
   j = strlen(client.chat->buffer+i)+i+1;
 
-  printf("Connect to %s:%s with token %s.\n", client.chat->buffer+i, client.chat->buffer+j, client.chat->buffer);
+  printf("Connected to %s (chat).\n", client.chat->buffer+i);
 
   client.game = client.chat;
 

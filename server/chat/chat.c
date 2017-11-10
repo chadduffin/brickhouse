@@ -297,7 +297,7 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
 
-        b_write_connection(connection, 1, connection->buffer);
+        b_connection_set_broadcast(&connections, connection, 1, connection->buffer);
       } else if (s < 0) {
         perror("b_read_connection\n");
         exit(EXIT_FAILURE);
@@ -346,6 +346,33 @@ void b_connection_set_refresh(struct b_connection_set *set) {
   }
 }
 
+void b_connection_set_broadcast(struct b_connection_set *set, struct b_connection *source, int count, ...) {
+  int i = 0, len = 0;
+  char buffer[BUFSIZE+1];
+  struct b_list_entry *entry = set->list.head;
+  struct b_connection *connection = NULL;
+  va_list list;
+
+  va_start(list, count); 
+
+  for (i = 0; i < count; i += 1) {
+    len += 1+snprintf(buffer+len, BUFSIZE-len,"%s", va_arg(list, const char *));
+  }
+
+  va_end(list);
+
+  while (entry) {
+    connection = (struct b_connection*)(entry->data);
+
+    if ((connection->s != listener.s) && (connection->s != source->s) &&
+        ((len = SSL_write(connection->ssl, buffer, len)) == -1)) {
+     
+    }
+
+    entry = entry->next;
+  }
+}
+
 void b_prompt(void) {
   printf("chat$ ");
   fflush(stdout);
@@ -353,7 +380,7 @@ void b_prompt(void) {
 
 void b_signal_handler(int signal) {
   perror("b_signal_handler\n");
-  b_exit();
+  
 }
 
 void b_command_handler(char *command) {

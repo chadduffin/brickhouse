@@ -27,7 +27,7 @@
 #define HOSTNAME      "localhost"
 #define MAXPENDING    32
 
-#define TIMEOUT       5
+#define TIMEOUT       30
 #define BUFSIZE       1024
 
 #define CHAT_PORT     "30001"
