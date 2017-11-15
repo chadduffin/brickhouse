@@ -15,8 +15,7 @@ int main(int argc, char **argv) {
       perror("b_client_select\n");
       exit(1);
     } else if ((ready) && (b_client_handle())) {
-      perror("b_client_handle\n");
-      exit(1);
+      break;
     }
 
     b_client_refresh();

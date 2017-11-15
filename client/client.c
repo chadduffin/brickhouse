@@ -36,20 +36,16 @@ void b_initialize_openssl(void) {
 // CLEANUP //
 
 void b_cleanup(void) {
-printf("a\n");
   if (client.chat) {
     b_close_connection(&(client.chat));
   }
 
-printf("b\n");
   if (client.game) {
     b_close_connection(&(client.game));
   }
 
-printf("c\n");
   b_cleanup_openssl();
 
-printf("d\n");
   FD_ZERO(&(client.fds));
 }
 
@@ -270,9 +266,9 @@ int ocsp_resp_cb(SSL *s, void *arg) {
   int len;
   OCSP_RESPONSE *rsp;
   len = SSL_get_tlsext_status_ocsp_resp(s, &p);
-  BIO_puts(arg, "OCSP response: ");
+  //BIO_puts(arg, "OCSP response: ");
   if (!p) {
-    BIO_puts(arg, "no response sent\n");
+    //BIO_puts(arg, "no response sent\n");
     return 1;
   }
 
