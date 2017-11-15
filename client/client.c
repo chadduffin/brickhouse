@@ -36,15 +36,20 @@ void b_initialize_openssl(void) {
 // CLEANUP //
 
 void b_cleanup(void) {
+printf("a\n");
   if (client.chat) {
     b_close_connection(&(client.chat));
   }
+
+printf("b\n");
   if (client.game) {
     b_close_connection(&(client.game));
   }
 
+printf("c\n");
   b_cleanup_openssl();
 
+printf("d\n");
   FD_ZERO(&(client.fds));
 }
 
@@ -178,7 +183,7 @@ int b_client_handle(void) {
       exit(EXIT_FAILURE);
     } else if (s == 0) {
       printf("Connection with chat server closed.\n");
-      b_close_connection(&(client.chat));
+      return -1;
     } else {
       printf("%s\n", client.chat->buffer);
     }
@@ -192,7 +197,7 @@ int b_client_handle(void) {
       exit(EXIT_FAILURE);
     } else if (s == 0) {
       printf("Connection with game server closed.\n");
-      b_close_connection(&(client.game));
+      return -1;
     }
 
     FD_CLR(client.game->s, &(client.fds));
@@ -255,7 +260,7 @@ void b_close_connection(struct b_connection **connection) {
   }
 
   close((*connection)->s);
-  free((*connection));
+  free(*connection);
 
   *connection = NULL;
 }

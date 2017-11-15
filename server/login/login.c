@@ -129,7 +129,7 @@ void b_cleanup(void) {
   struct b_list_entry *entry = connections.list.head;
   
   while (entry) {
-    b_close_connection((struct b_connection**)(&(entry->data)));
+    b_connection_set_remove(&connections, (struct b_connection*)(entry->data));
     entry = connections.list.head;
   }
 

@@ -102,7 +102,7 @@ void b_cleanup(void) {
   struct b_list_entry *entry = connections.list.head;
   
   while (entry) {
-    b_close_connection((struct b_connection**)(&(entry->data)));
+    b_connection_set_remove(&connections, (struct b_connection*)(entry->data));
     entry = connections.list.head;
   }
 
@@ -380,7 +380,7 @@ void b_prompt(void) {
 
 void b_signal_handler(int signal) {
   perror("b_signal_handler\n");
-  
+  b_exit();
 }
 
 void b_command_handler(char *command) {
