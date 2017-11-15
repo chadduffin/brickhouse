@@ -33,6 +33,9 @@
 #define CHAT_PORT     "30001"
 #define CHAT_HOSTNAME "localhost"
 
+#define GAME_PORT     "30002"
+#define GAME_HOSTNAME "localhost"
+
 struct b_mysql {
   MYSQL *con;
   MYSQL_RES *result;

@@ -222,6 +222,7 @@ int b_client_login(void) {
   int i, j;
   char email[64],
        password[64];
+  struct b_connection *connection;
 
   scanf("%s", email);
   scanf("%s", password);
@@ -232,16 +233,30 @@ int b_client_login(void) {
 
   b_client_handle();
 
-  i = strlen(client.chat->buffer)+1;
-  j = strlen(client.chat->buffer+i)+i+1;
+  connection = client.chat;
 
-  printf("Connected to %s (chat).\n", client.chat->buffer+i);
+  i = strlen(connection->buffer)+1;
+  j = strlen(connection->buffer+i)+i+1;
 
-  client.game = client.chat;
+  if (!(client.chat = b_open_connection(connection->buffer+i, connection->buffer+j))) {
+    b_close_connection(&(client.chat));
+    b_close_connection(&connection);
+    return -1;
+  }
 
-  client.chat = b_open_connection(client.game->buffer+i, client.game->buffer+j);
+  printf("Connected to %s:%s (chat).\n", connection->buffer+i, connection->buffer+j);
 
-  b_close_connection(&(client.game));
+  i = strlen(connection->buffer+j)+j+1;
+  j = strlen(connection->buffer+i)+i+1;
+
+  if (!(client.game = b_open_connection(connection->buffer+i, connection->buffer+j))) {
+    b_close_connection(&(client.chat));
+    b_close_connection(&(client.game));
+    b_close_connection(&connection);
+    return -1;
+  }
+
+  printf("Connected to %s:%s (game).\n", connection->buffer+i, connection->buffer+j);
 
   return 0;
 }

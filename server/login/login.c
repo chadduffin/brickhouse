@@ -251,7 +251,7 @@ int b_verify_connection(struct b_connection *connection) {
     digest[p_len] = 0;
 
     if (!strcmp(password, digest)) {
-      b_write_connection(connection, 3, row[4], CHAT_HOSTNAME, CHAT_PORT);
+      b_write_connection(connection, 5, row[4], CHAT_HOSTNAME, CHAT_PORT, GAME_HOSTNAME, GAME_PORT);
       return 1;
     }
   }
