@@ -85,6 +85,7 @@ void b_connection_set_add(struct b_connection_set *set, struct b_connection *con
 void b_connection_set_remove(struct b_connection_set *set, struct b_connection *connection);
 void b_connection_set_refresh(struct b_connection_set *set);
 void b_connection_set_broadcast(struct b_connection_set *set, struct b_connection *source, int count, ...);
+void b_connection_set_broadcast_len(struct b_connection_set *set, struct b_connection *source, char *buffer, int len);
 
 void b_prompt(void);
 void b_signal_handler(int signal);

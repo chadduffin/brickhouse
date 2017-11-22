@@ -41,6 +41,11 @@
 #elif _WIN32
 #endif
 
+extern char *username;
+
 extern struct b_client client;
+
+extern SDL_Window *window;
+extern SDL_Renderer *renderer;
 
 #endif /* __GLOBALS__ */

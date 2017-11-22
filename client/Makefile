@@ -15,7 +15,7 @@ run: clean all
 	./$(TARGET)
 
 macintosh: $(OBJECTS)
-	$(CC) $(OBJECTS) -L /usr/local/opt/openssl/lib/ -lssl -lcrypto -o $(TARGET)
+	$(CC) $(OBJECTS) -L /usr/local/opt/openssl/lib/ -I /Library/Frameworks/ -framework SDL2 -framework SDL2_net -framework SDL2_image -lssl -lcrypto -o $(TARGET)
 
 clean:
 	rm -f *.o

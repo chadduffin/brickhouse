@@ -33,6 +33,20 @@ void b_initialize_openssl(void) {
   SSL_CTX_set_options(client.ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION);
 }
 
+void b_initialize_graphics(void) {
+  window = SDL_CreateWindow("Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, 0);
+
+  if (window) {
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    if (!renderer) {
+      SDL_DestroyWindow(window);
+      b_cleanup();
+      exit(EXIT_FAILURE);
+    }
+  }
+}
+
 // CLEANUP //
 
 void b_cleanup(void) {
@@ -46,6 +60,8 @@ void b_cleanup(void) {
 
   b_cleanup_openssl();
 
+  b_cleanup_graphics();
+
   FD_ZERO(&(client.fds));
 }
 
@@ -54,12 +70,19 @@ void b_cleanup_openssl(void) {
   EVP_cleanup();
 }
 
+void b_cleanup_graphics(void) {
+  SDL_DestroyRenderer(renderer);
+  SDL_DestroyWindow(window);
+}
+
 // THE MAGIC //
 
 struct b_connection* b_open_connection(const char *hostname, const char *port) {
   struct b_connection *connection = (struct b_connection*)malloc(sizeof(struct b_connection));
   X509_VERIFY_PARAM *param;
   BIO *arg = BIO_new_fp(stdout, BIO_NOCLOSE);
+
+  memset(connection->buffer, 0, BUFSIZE+1);
 
   connection->s = b_open_socket(hostname, port);
 
@@ -167,8 +190,12 @@ int b_client_handle(void) {
     char buffer[32];
 
     fgets(buffer, 32, stdin);
+
+    buffer[strlen(buffer)-1] = 0;
     
-    b_write_connection(client.chat, 1, buffer);
+    if (buffer[0] != 0) {
+      b_write_connection(client.chat, 2, username, buffer);
+    }
 
     FD_CLR(STDIN_FILENO, &(client.fds));
   }
@@ -181,7 +208,9 @@ int b_client_handle(void) {
       printf("Connection with chat server closed.\n");
       return -1;
     } else {
-      printf("%s\n", client.chat->buffer);
+      int i = strlen(client.chat->buffer)+1;
+
+      printf("%s: %s\n", client.chat->buffer, client.chat->buffer+i);
     }
 
     FD_CLR(client.chat->s, &(client.fds));
@@ -224,16 +253,23 @@ int b_client_login(void) {
        password[64];
   struct b_connection *connection;
 
+  printf("email: ");
   scanf("%s", email);
+  printf("password: ");
   scanf("%s", password);
 
-  b_write_connection(client.chat, 2, email, password);
+  b_write_connection(client.chat, 3, HEADER_LOGIN, email, password);
 
   b_client_select();
 
   b_client_handle();
 
   connection = client.chat;
+
+  if (!strcmp("err", connection->buffer)) {
+    perror("invalid login\n");
+    return -1;
+  }
 
   i = strlen(connection->buffer)+1;
   j = strlen(connection->buffer+i)+i+1;
@@ -257,6 +293,16 @@ int b_client_login(void) {
   }
 
   printf("Connected to %s:%s (game).\n", connection->buffer+i, connection->buffer+j);
+
+  b_close_connection(&connection);
+
+  email[strcspn(email, "@")] = 0;
+
+  username = (char*)malloc(strlen(email)+1);
+
+  strncpy(username, email, strlen(email)+1);
+
+  b_initialize_graphics();
 
   return 0;
 }

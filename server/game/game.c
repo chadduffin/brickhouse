@@ -126,6 +126,8 @@ struct b_connection* b_open_connection(void) {
     perror("accept\n");
     exit(EXIT_FAILURE);
   }
+
+  memset(connection->buffer, 0, BUFSIZE+1);
   
   connection->ssl = SSL_new(listener.ctx);
 
@@ -297,7 +299,7 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
 
-        b_connection_set_broadcast(&connections, connection, 1, connection->buffer);
+        memset(connection->buffer, 0, BUFSIZE+1);
       } else if (s < 0) {
         perror("b_read_connection\n");
         exit(EXIT_FAILURE);

@@ -36,6 +36,9 @@
 #define GAME_PORT     "30002"
 #define GAME_HOSTNAME "localhost"
 
+#define HEADER_PING   "0"
+#define HEADER_LOGIN  "1"
+
 struct b_mysql {
   MYSQL *con;
   MYSQL_RES *result;

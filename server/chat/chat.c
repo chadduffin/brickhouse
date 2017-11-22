@@ -126,6 +126,8 @@ struct b_connection* b_open_connection(void) {
     perror("accept\n");
     exit(EXIT_FAILURE);
   }
+
+  memset(connection->buffer, 0, BUFSIZE+1);
   
   connection->ssl = SSL_new(listener.ctx);
 
@@ -297,7 +299,9 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
 
-        b_connection_set_broadcast(&connections, connection, 1, connection->buffer);
+        b_connection_set_broadcast_len(&connections, connection, connection->buffer, s);
+
+        memset(connection->buffer, 0, BUFSIZE+1);
       } else if (s < 0) {
         perror("b_read_connection\n");
         exit(EXIT_FAILURE);
@@ -360,6 +364,22 @@ void b_connection_set_broadcast(struct b_connection_set *set, struct b_connectio
   }
 
   va_end(list);
+
+  while (entry) {
+    connection = (struct b_connection*)(entry->data);
+
+    if ((connection->s != listener.s) && (connection->s != source->s) &&
+        ((len = SSL_write(connection->ssl, buffer, len)) == -1)) {
+     
+    }
+
+    entry = entry->next;
+  }
+}
+
+void b_connection_set_broadcast_len(struct b_connection_set *set, struct b_connection *source, char *buffer, int len) {
+  struct b_list_entry *entry = set->list.head;
+  struct b_connection *connection = NULL;
 
   while (entry) {
     connection = (struct b_connection*)(entry->data);

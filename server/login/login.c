@@ -159,6 +159,8 @@ struct b_connection* b_open_connection(void) {
     perror("accept\n");
     exit(EXIT_FAILURE);
   }
+
+  memset(connection->buffer, 0, BUFSIZE+1);
   
   connection->ssl = SSL_new(listener.ctx);
 
@@ -220,18 +222,20 @@ int b_write_connection(struct b_connection *connection, int count, ...) {
 
 int b_verify_connection(struct b_connection *connection) {
   char query[BUFSIZE+1], digest[BUFSIZE+1], password[BUFSIZE+1];
-  unsigned int e_len, p_len;
+  unsigned int e_len, p_len, h_len;
   MYSQL_ROW row;
   MYSQL_RES *result;
 
-  e_len = strlen(connection->buffer);
-  p_len = strlen(connection->buffer+e_len);
+  h_len = strlen(connection->buffer)+1;
 
-  if (!b_verify_email(connection->buffer)) {
+  e_len = strlen(connection->buffer+h_len);
+  p_len = strlen(connection->buffer+h_len+e_len+1);
+
+  if (!b_verify_email(connection->buffer+h_len)) {
     return 0;
   }
 
-  snprintf(query, BUFSIZE, "SELECT * FROM accounts WHERE Email=\"%s\";", connection->buffer); 
+  snprintf(query, BUFSIZE, "SELECT * FROM accounts WHERE Email=\"%s\";", connection->buffer+h_len); 
 
   b_mysql_query(query);
 
@@ -240,7 +244,7 @@ int b_verify_connection(struct b_connection *connection) {
   if ((result) && (row = mysql_fetch_row(result))) {
     char *salt = row[3];
 
-    PKCS5_PBKDF2_HMAC(connection->buffer+e_len+1, strlen(connection->buffer+e_len+1), (unsigned char*)salt, 64, 4096, EVP_sha512(), 64, (unsigned char*)digest);
+    PKCS5_PBKDF2_HMAC(connection->buffer+h_len+e_len+1, strlen(connection->buffer+h_len+e_len+1), (unsigned char*)salt, 64, 4096, EVP_sha512(), 64, (unsigned char*)digest);
 
     p_len = mysql_real_escape_string(mysql.con, password, digest, 64);
 
@@ -383,11 +387,15 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
 
-        if (!b_verify_connection(connection)) {
-          b_write_connection(connection, 1, "err");
-        }
+        if (!strcmp(connection->buffer, HEADER_LOGIN)) {
+          if (!b_verify_connection(connection)) {
+            b_write_connection(connection, 1, "err");
+          }
 
-        b_close_connection(&connection);
+          b_close_connection(&connection);
+        } else {
+          memset(connection->buffer, 0, BUFSIZE+1);
+        }
       } else if (s < 0) {
         perror("b_read_connection\n");
         exit(EXIT_FAILURE);
