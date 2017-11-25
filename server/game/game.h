@@ -30,8 +30,12 @@
 #define TIMEOUT       5
 #define BUFSIZE       1024
 
+#define PLAYER_INFO   "2"
+#define PLAYER_UPDATE "3"
+
 struct b_listener {
   int s;
+  unsigned int next_id;
   struct addrinfo *rp;
   SSL_CTX *ctx;
 };
@@ -43,14 +47,20 @@ struct b_list_entry {
 };
 
 struct b_list {
-  int max;
+  int max, size;
   struct b_list_entry *head, *tail;
+};
+
+struct b_player {
+  unsigned int id;
+  unsigned short x, y;
 };
 
 struct b_connection {
   int s;
   char buffer[BUFSIZE+1];
   struct timeval tv;
+  struct b_player player;
   SSL *ssl;
 };
 
@@ -85,6 +95,7 @@ void b_connection_set_add(struct b_connection_set *set, struct b_connection *con
 void b_connection_set_remove(struct b_connection_set *set, struct b_connection *connection);
 void b_connection_set_refresh(struct b_connection_set *set);
 void b_connection_set_broadcast(struct b_connection_set *set, struct b_connection *source, int count, ...);
+void b_connection_initialize(struct b_connection *connection);
 
 void b_prompt(void);
 void b_signal_handler(int signal);

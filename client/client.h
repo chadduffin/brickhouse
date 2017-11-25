@@ -63,6 +63,9 @@
 #define HEADER_PING     "0" 
 #define HEADER_LOGIN    "1"
 
+#define PLAYER_INFO     "2"
+#define PLAYER_UPDATE   "3"
+
 struct b_connection {
   int s;
   char buffer[BUFSIZE+1];
@@ -73,7 +76,14 @@ struct b_connection {
 struct b_client {
   fd_set fds;
   struct b_connection *chat, *game;
+  struct b_player *head, *tail;
   SSL_CTX *ctx;
+};
+
+struct b_player {
+  unsigned int id;
+  unsigned short x, y;
+  struct b_player *next;
 };
 
 /* initialization */
@@ -96,6 +106,12 @@ int b_client_handle(void);
 int b_client_refresh(void);
 int b_client_login(void);
 void b_close_connection(struct b_connection **connection);
+void b_handle_client_buffer(struct b_connection *connection);
+
+void b_add_player(unsigned int id);
+struct b_player* b_find_player(unsigned int id);
+void b_remove_player(unsigned int id);
+void b_update_player(unsigned int id, unsigned short x, unsigned short y);
 
 int ocsp_resp_cb(SSL *s, void *arg);
 

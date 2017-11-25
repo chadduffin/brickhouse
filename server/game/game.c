@@ -10,6 +10,8 @@ void b_initialize(int argc, char **argv) {
 
   FD_SET(STDIN_FILENO, &(connections.fds));
 
+  connections.list.size = 0;
+
   b_initialize_socket();
   b_initialize_openssl();
   b_prompt();
@@ -145,8 +147,10 @@ struct b_connection* b_open_connection(void) {
 
   if (SSL_accept(connection->ssl)) {
     gettimeofday(&(connection->tv), NULL);
-
     b_connection_set_add(&connections, connection);
+
+    // update players of this addition
+    b_connection_initialize(connection);
   } else {
     b_close_connection(&connection);
   }
@@ -207,6 +211,8 @@ void b_list_add(struct b_list *list, void *data, int key) {
   }
 
   list->max = (list->max > key) ? list->max : key;
+
+  connections.list.size += 1;
 }
 
 void b_list_remove(struct b_list *list, int key) {
@@ -235,6 +241,8 @@ void b_list_remove(struct b_list *list, int key) {
   entry = *indirect;
 
   *indirect = entry->next;
+
+  list->size -= 1;
 
   free(entry);
 }
@@ -373,6 +381,46 @@ void b_connection_set_broadcast(struct b_connection_set *set, struct b_connectio
 
     entry = entry->next;
   }
+}
+
+void b_connection_initialize(struct b_connection *connection) {
+  int i = 0, len = ((connections.list.size-1)*8)+4;
+  char *data = calloc(1, len);
+  struct b_list_entry *entry = connections.list.head;
+  struct b_player *player = &(connection->player);
+
+  player->id = listener.next_id++;
+  player->x = player->id%640;
+  player->y = player->id%480;
+
+  // add the header
+  strcpy(data, PLAYER_INFO);
+
+  // add # of players
+  *((unsigned int*)(data+i+2)) = htonl((unsigned int)(connections.list.size-1));
+  
+  // add the player data
+  while (entry) {
+    if (entry->key == listener.s) {
+      entry = entry->next;
+      continue;
+    }
+
+    player = &(((struct b_connection*)(entry->data))->player);
+    entry = entry->next;
+
+    *((unsigned int*)(data+i+6)) = htonl(player->id);
+    *((unsigned int*)(data+i+10)) = htonl(player->x);
+    *((unsigned int*)(data+i+12)) = htonl(player->y);
+
+    i += 8;
+  }
+
+  if (SSL_write(connection->ssl, data, len)  == -1) {
+    b_close_connection(&connection);
+  }
+
+  free(data);
 }
 
 void b_prompt(void) {

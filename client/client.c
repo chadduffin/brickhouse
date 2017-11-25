@@ -223,6 +223,8 @@ int b_client_handle(void) {
     } else if (s == 0) {
       printf("Connection with game server closed.\n");
       return -1;
+    } else {
+      b_handle_client_buffer(client.game);
     }
 
     FD_CLR(client.game->s, &(client.fds));
@@ -320,6 +322,74 @@ void b_close_connection(struct b_connection **connection) {
   free(*connection);
 
   *connection = NULL;
+}
+
+void b_handle_client_buffer(struct b_connection *connection) {
+  const char *buf = client.game->buffer;
+
+  if (!strcmp(PLAYER_UPDATE, buf)) {
+    
+  } else if (!strcmp(PLAYER_INFO, buf)) {
+    unsigned int len = ntohl(*((unsigned int*)(connection->buffer+2)));
+
+    for (unsigned int i = 0; i < len; i++) {
+      b_add_player(ntohl(*((unsigned int*)(connection->buffer+(i*8)+6))));
+      client.tail->x = ntohs(*((unsigned short*)(connection->buffer+(i*8)+10)));
+      client.tail->y = ntohs(*((unsigned short*)(connection->buffer+(i*8)+12)));
+    }
+  }
+}
+
+void b_add_player(unsigned int id) {
+  struct b_player *player = (struct b_player*)malloc(sizeof(struct b_player));
+
+  player->id = id;
+  player->x = id%640;
+  player->y = id%480;
+  player->next = NULL;
+
+  if (!client.tail) {
+    client.head = client.tail = player;
+  } else {
+    client.tail->next = player;
+    client.tail = player;
+  }
+}
+
+struct b_player* b_find_player(unsigned int id) {
+  struct b_player *player = client.head;
+
+  while ((player) && (player->id != id)) {
+    player = player->next;
+  }
+
+  return player;
+}
+
+void b_remove_player(unsigned int id) {
+  struct b_player *player = client.head,
+                  **indirect = &(client.head);
+
+  while ((*indirect) && ((*indirect)->id != id)) {
+    player = player->next;
+    indirect = &player;
+  }
+
+  *indirect = (*indirect)->next;
+
+  free(player);
+}
+
+void b_update_player(unsigned int id, unsigned short x, unsigned short y) {
+  struct b_player *player = b_find_player(id);
+
+  if (!player) {
+    b_add_player(id);
+    player = client.tail;
+  }
+
+  player->x = x;
+  player->y = y;
 }
 
 int ocsp_resp_cb(SSL *s, void *arg) {
