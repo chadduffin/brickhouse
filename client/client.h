@@ -65,6 +65,7 @@
 
 #define PLAYER_INFO     "2"
 #define PLAYER_UPDATE   "3"
+#define PLAYER_REMOVE   "4"
 
 struct b_connection {
   int s;
@@ -108,7 +109,7 @@ int b_client_login(void);
 void b_close_connection(struct b_connection **connection);
 void b_handle_client_buffer(struct b_connection *connection);
 
-void b_add_player(unsigned int id);
+void b_add_player(unsigned int id, unsigned short x, unsigned short y);
 struct b_player* b_find_player(unsigned int id);
 void b_remove_player(unsigned int id);
 void b_update_player(unsigned int id, unsigned short x, unsigned short y);

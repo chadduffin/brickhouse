@@ -32,6 +32,7 @@
 
 #define PLAYER_INFO   "2"
 #define PLAYER_UPDATE "3"
+#define PLAYER_REMOVE "4"
 
 struct b_listener {
   int s;
@@ -95,7 +96,10 @@ void b_connection_set_add(struct b_connection_set *set, struct b_connection *con
 void b_connection_set_remove(struct b_connection_set *set, struct b_connection *connection);
 void b_connection_set_refresh(struct b_connection_set *set);
 void b_connection_set_broadcast(struct b_connection_set *set, struct b_connection *source, int count, ...);
-void b_connection_initialize(struct b_connection *connection);
+void b_connection_set_broadcast_raw(struct b_connection_set *set, struct b_connection *source, void *buffer, int len);
+
+void b_player_create(struct b_connection *connection);
+void b_player_destroy(struct b_connection *connection);
 
 void b_prompt(void);
 void b_signal_handler(int signal);

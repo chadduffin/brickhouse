@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
       b_client_refresh();
     }
   }
-  
+
   b_cleanup();
 
   return 0;

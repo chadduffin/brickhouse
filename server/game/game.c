@@ -150,7 +150,7 @@ struct b_connection* b_open_connection(void) {
     b_connection_set_add(&connections, connection);
 
     // update players of this addition
-    b_connection_initialize(connection);
+    b_player_create(connection);
   } else {
     b_close_connection(&connection);
   }
@@ -164,6 +164,8 @@ void b_close_connection(struct b_connection **connection) {
   if ((*connection)->ssl) {
     SSL_free((*connection)->ssl);
   }
+
+  b_player_destroy(*connection);
 
   close((*connection)->s);
   free((*connection));
@@ -375,7 +377,7 @@ void b_connection_set_broadcast(struct b_connection_set *set, struct b_connectio
     connection = (struct b_connection*)(entry->data);
 
     if ((connection->s != listener.s) && (connection->s != source->s) &&
-        ((len = SSL_write(connection->ssl, buffer, len)) == -1)) {
+        ((len = SSL_write(connection->ssl, buffer, len)) <= 0)) {
      
     }
 
@@ -383,7 +385,23 @@ void b_connection_set_broadcast(struct b_connection_set *set, struct b_connectio
   }
 }
 
-void b_connection_initialize(struct b_connection *connection) {
+void b_connection_set_broadcast_raw(struct b_connection_set *set, struct b_connection *source, void *buffer, int len) {
+  struct b_list_entry *entry = set->list.head;
+  struct b_connection *connection = NULL;
+
+  while (entry) {
+    connection = (struct b_connection*)(entry->data);
+
+    if ((connection->s != listener.s) && (connection->s != source->s) &&
+        ((len = SSL_write(connection->ssl, buffer, len)) <= 0)) {
+
+    }
+
+    entry = entry->next;
+  }
+}
+
+void b_player_create(struct b_connection *connection) {
   int i = 0, len = ((connections.list.size-1)*8)+4;
   char *data = calloc(1, len);
   struct b_list_entry *entry = connections.list.head;
@@ -400,25 +418,50 @@ void b_connection_initialize(struct b_connection *connection) {
   *((unsigned int*)(data+i+2)) = htonl((unsigned int)(connections.list.size-1));
   
   // add the player data
-  while (entry) {
-    if (entry->key == listener.s) {
-      entry = entry->next;
-      continue;
-    }
-
-    player = &(((struct b_connection*)(entry->data))->player);
-    entry = entry->next;
-
+  while (player) {
     *((unsigned int*)(data+i+6)) = htonl(player->id);
-    *((unsigned int*)(data+i+10)) = htonl(player->x);
-    *((unsigned int*)(data+i+12)) = htonl(player->y);
+    *((unsigned short*)(data+i+10)) = htonl(player->x);
+    *((unsigned short*)(data+i+12)) = htonl(player->y);
 
     i += 8;
+
+    do {
+      entry = entry->next;
+    } while ((entry) && ((entry->key == listener.s) || (((struct b_connection*)(entry->data))->player.id == listener.next_id-1)));
+
+    player = (entry) ? &(((struct b_connection*)(entry->data))->player) : NULL;
   }
 
-  if (SSL_write(connection->ssl, data, len)  == -1) {
+  if (SSL_write(connection->ssl, data, len) <= 0) {
     b_close_connection(&connection);
+    free(data);
+    return;
   }
+
+  data = realloc(data, 15);
+
+  strcpy(data, PLAYER_INFO);
+
+  unsigned int size = 1;
+
+  *((unsigned int*)(data+2)) = htonl(size);
+  *((unsigned int*)(data+6)) = htonl(connection->player.id);
+  *((unsigned short*)(data+10)) = htonl(connection->player.x);
+  *((unsigned short*)(data+12)) = htonl(connection->player.y);
+
+  b_connection_set_broadcast_raw(&connections, connection, data, 15);
+
+  free(data);
+}
+
+void b_player_destroy(struct b_connection *connection) {
+  char *data = (char*)calloc(1, 7);
+
+  strcpy(data, PLAYER_REMOVE);
+
+  *((unsigned int*)(data+2)) = htonl(connection->player.id);
+
+  b_connection_set_broadcast_raw(&connections, connection, data, 7);
 
   free(data);
 }
