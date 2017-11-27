@@ -169,12 +169,16 @@ int b_write_connection(struct b_connection *connection, int count, ...) {
   return SSL_write(connection->ssl, buffer, len);
 }
 
+int b_write_connection_raw(struct b_connection *connection, void *buffer, int len) {
+  return SSL_write(connection->ssl, buffer, len);
+}
+
 int b_client_select(void) {
   int max = -1;
   struct timeval tv;
 
-  tv.tv_sec = 2;
-  tv.tv_usec = 0;
+  tv.tv_sec = 0;
+  tv.tv_usec = 330000;
 
   if (client.chat) {
     max = client.chat->s;
@@ -331,26 +335,51 @@ void b_close_connection(struct b_connection **connection) {
 void b_handle_client_buffer(struct b_connection *connection) {
   const char *buf = client.game->buffer;
 
-  printf("%s.\n", buf);
+  printf("%s\n", buf);
 
   if (!strcmp(PLAYER_INFO, buf)) {
     unsigned int len = ntohl(*((unsigned int*)(connection->buffer+2)));
 
     for (unsigned int i = 0; i < len; i++) {
-      printf("Player added: %u.\n", ntohl(*((unsigned int*)(connection->buffer+(i*8)+6))));
       b_add_player(ntohl(*((unsigned int*)(connection->buffer+(i*8)+6))),
                    ntohs(*((unsigned short*)(connection->buffer+(i*8)+10))),
                    ntohs(*((unsigned short*)(connection->buffer+(i*8)+12))));
     }
   } else if (!strcmp(PLAYER_UPDATE, buf)) {
-    printf("Player updated.\n");
     b_update_player(ntohl(*((unsigned int*)(connection->buffer+2))),
                     ntohs(*((unsigned short*)(connection->buffer+6))),
                     ntohs(*((unsigned short*)(connection->buffer+8))));
   } else if (!strcmp(PLAYER_REMOVE, buf)) {
-    printf("Player removed: %u.\n", ntohl(*((unsigned int*)(connection->buffer+2))));
     b_remove_player(ntohl(*((unsigned int*)(connection->buffer+2))));
   } 
+}
+
+void b_render_players(void) {
+  struct b_player *player = client.head;
+  SDL_Rect dst;
+  
+  SDL_RenderClear(renderer);
+
+  SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+
+  dst.x = player->x;
+  dst.y = player->y;
+  dst.w = 32;
+  dst.h = 32;
+
+  SDL_RenderFillRect(renderer, &dst);
+
+  SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+
+  while ((player = player->next)) {
+    dst.x = player->x;
+    dst.y = player->y;
+    SDL_RenderFillRect(renderer, &dst);
+  }
+
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+
+  SDL_RenderPresent(renderer);
 }
 
 void b_add_player(unsigned int id, unsigned short x, unsigned short y) {
@@ -406,12 +435,26 @@ void b_remove_player(unsigned int id) {
 void b_update_player(unsigned int id, unsigned short x, unsigned short y) {
   struct b_player *player = b_find_player(id);
 
+  printf("%u to %u, %u.\n", id, x, y);
+
   if (!player) {
     b_add_player(id, x, y);
   } else {
     player->x = x;
     player->y = y;
   }
+}
+
+void b_send_player_state(unsigned int id, unsigned short x, unsigned short y) {
+  char *buffer = (char*)calloc(1, 11);
+
+  strcpy(buffer, PLAYER_UPDATE);
+
+  *((unsigned int*)(buffer+2)) = htonl(id);
+  *((unsigned short*)(buffer+6)) = htons(x);
+  *((unsigned short*)(buffer+8)) = htons(y);
+
+  b_write_connection_raw(client.game, buffer, 11);
 }
 
 int ocsp_resp_cb(SSL *s, void *arg) {

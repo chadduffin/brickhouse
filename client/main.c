@@ -18,6 +18,15 @@ int main(int argc, char **argv) {
       }
 
       b_client_refresh();
+
+      b_render_players();
+
+      if ((client.head) && (client.head->id == 0)) {
+        if (client.head->x < 500) {
+          client.head->x += 1;
+          b_send_player_state(client.head->id, client.head->x, client.head->y);
+        }
+      }
     }
   }
 

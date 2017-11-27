@@ -102,6 +102,7 @@ struct b_connection* b_open_connection(const char *hostname, const char *port);
 int b_open_socket(const char *hostname, const char *port);
 int b_read_connection(struct b_connection *connection, char *buf);
 int b_write_connection(struct b_connection *connection, int count, ...);
+int b_write_connection_raw(struct b_connection *connection, void *buffer, int len);
 int b_client_select(void);
 int b_client_handle(void);
 int b_client_refresh(void);
@@ -109,10 +110,12 @@ int b_client_login(void);
 void b_close_connection(struct b_connection **connection);
 void b_handle_client_buffer(struct b_connection *connection);
 
+void b_render_players(void);
 void b_add_player(unsigned int id, unsigned short x, unsigned short y);
 struct b_player* b_find_player(unsigned int id);
 void b_remove_player(unsigned int id);
 void b_update_player(unsigned int id, unsigned short x, unsigned short y);
+void b_send_player_state(unsigned int id, unsigned short x, unsigned short y);
 
 int ocsp_resp_cb(SSL *s, void *arg);
 
