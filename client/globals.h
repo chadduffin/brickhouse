@@ -45,6 +45,7 @@ extern char *username;
 
 extern struct b_client client;
 
+extern SDL_Event event;
 extern SDL_Window *window;
 extern SDL_Renderer *renderer;
 

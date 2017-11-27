@@ -116,6 +116,7 @@ struct b_player* b_find_player(unsigned int id);
 void b_remove_player(unsigned int id);
 void b_update_player(unsigned int id, unsigned short x, unsigned short y);
 void b_send_player_state(unsigned int id, unsigned short x, unsigned short y);
+void b_handle_input(void);
 
 int ocsp_resp_cb(SSL *s, void *arg);
 

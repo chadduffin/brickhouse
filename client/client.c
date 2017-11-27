@@ -335,8 +335,6 @@ void b_close_connection(struct b_connection **connection) {
 void b_handle_client_buffer(struct b_connection *connection) {
   const char *buf = client.game->buffer;
 
-  printf("%s\n", buf);
-
   if (!strcmp(PLAYER_INFO, buf)) {
     unsigned int len = ntohl(*((unsigned int*)(connection->buffer+2)));
 
@@ -393,8 +391,7 @@ void b_add_player(unsigned int id, unsigned short x, unsigned short y) {
   if (!client.tail) {
     client.head = client.tail = player;
   } else {
-    client.tail->next = player;
-    client.tail = player;
+    client.tail = (client.tail->next = player);
   }
 }
 
@@ -415,7 +412,7 @@ void b_remove_player(unsigned int id) {
     return;
   }
 
-  indirect = &player;
+  indirect = &(client.head);
 
   while ((*indirect)->id != id) {
     indirect = &((*indirect)->next);
@@ -435,8 +432,6 @@ void b_remove_player(unsigned int id) {
 void b_update_player(unsigned int id, unsigned short x, unsigned short y) {
   struct b_player *player = b_find_player(id);
 
-  printf("%u to %u, %u.\n", id, x, y);
-
   if (!player) {
     b_add_player(id, x, y);
   } else {
@@ -455,6 +450,40 @@ void b_send_player_state(unsigned int id, unsigned short x, unsigned short y) {
   *((unsigned short*)(buffer+8)) = htons(y);
 
   b_write_connection_raw(client.game, buffer, 11);
+}
+
+void b_handle_input(void) {
+	while (SDL_PollEvent(&event)) {
+		switch (event.type) {
+			case SDL_QUIT:
+        {
+        }
+        break;
+			case SDL_KEYDOWN:
+				{
+					if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+            b_cleanup();
+            exit(0);
+					} else {
+            if (event.key.keysym.scancode == SDL_SCANCODE_UP) {
+              client.head->y -= 4;
+            }
+            if (event.key.keysym.scancode == SDL_SCANCODE_DOWN) {
+              client.head->y += 4;
+            }
+            if (event.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
+              client.head->x += 4;
+            }
+            if (event.key.keysym.scancode == SDL_SCANCODE_LEFT) {
+              client.head->x -= 4;
+            }
+					}
+				}
+				break;
+			default:
+				break;
+		}
+	}
 }
 
 int ocsp_resp_cb(SSL *s, void *arg) {

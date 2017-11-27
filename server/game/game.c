@@ -309,8 +309,6 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
         connection->buffer[BUFSIZE] = 0;
 
-        printf("%s\n", connection->buffer);
-    
         b_connection_set_broadcast_raw(&connections, connection, connection->buffer, s);
 
         memset(connection->buffer, 0, BUFSIZE+1);
