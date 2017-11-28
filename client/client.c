@@ -358,6 +358,10 @@ void b_render_players(void) {
   
   SDL_RenderClear(renderer);
 
+  if (!player) {
+    return;
+  }
+
   SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
 
   dst.x = player->x;
@@ -453,6 +457,9 @@ void b_send_player_state(unsigned int id, unsigned short x, unsigned short y) {
 }
 
 void b_handle_input(void) {
+  if (!client.head) {
+    return;
+  }
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
 			case SDL_QUIT:
