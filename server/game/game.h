@@ -38,6 +38,7 @@ struct b_listener {
   int s;
   unsigned int next_id;
   struct addrinfo *rp;
+  struct timeval tv;
   SSL_CTX *ctx;
 };
 
@@ -99,6 +100,8 @@ void b_connection_set_broadcast(struct b_connection_set *set, struct b_connectio
 void b_connection_set_broadcast_raw(struct b_connection_set *set, struct b_connection *source, void *buffer, int len);
 
 void b_player_create(struct b_connection *connection);
+void b_player_update(unsigned int id, unsigned short x, unsigned short y);
+void b_player_buffer_update(void);
 void b_player_destroy(struct b_connection *connection);
 
 void b_prompt(void);

@@ -21,10 +21,6 @@ int main(int argc, char **argv) {
 
       b_handle_input();
       b_render_players();
-
-      if (client.head) {
-        b_send_player_state(client.head->id, client.head->x, client.head->y);
-      }
     }
   }
 

@@ -344,9 +344,15 @@ void b_handle_client_buffer(struct b_connection *connection) {
                    ntohs(*((unsigned short*)(connection->buffer+(i*8)+12))));
     }
   } else if (!strcmp(PLAYER_UPDATE, buf)) {
-    b_update_player(ntohl(*((unsigned int*)(connection->buffer+2))),
-                    ntohs(*((unsigned short*)(connection->buffer+6))),
-                    ntohs(*((unsigned short*)(connection->buffer+8))));
+    unsigned int len = ntohl(*((unsigned int*)(connection->buffer+2)));
+
+    for (unsigned int i = 0; i < len; i += 1) {
+      if (ntohl(*((unsigned int*)(connection->buffer+6+i*8))) != client.head->id) {
+        b_update_player(ntohl(*((unsigned int*)(connection->buffer+(i*8)+6))),
+                        ntohs(*((unsigned short*)(connection->buffer+(i*8)+10))),
+                        ntohs(*((unsigned short*)(connection->buffer+(i*8)+12))));
+      }
+    }
   } else if (!strcmp(PLAYER_REMOVE, buf)) {
     b_remove_player(ntohl(*((unsigned int*)(connection->buffer+2))));
   } 
@@ -445,7 +451,7 @@ void b_update_player(unsigned int id, unsigned short x, unsigned short y) {
 }
 
 void b_send_player_state(unsigned int id, unsigned short x, unsigned short y) {
-  char *buffer = (char*)calloc(1, 11);
+  char *buffer = (char*)calloc(1, 10);
 
   strcpy(buffer, PLAYER_UPDATE);
 
@@ -453,10 +459,12 @@ void b_send_player_state(unsigned int id, unsigned short x, unsigned short y) {
   *((unsigned short*)(buffer+6)) = htons(x);
   *((unsigned short*)(buffer+8)) = htons(y);
 
-  b_write_connection_raw(client.game, buffer, 11);
+  b_write_connection_raw(client.game, buffer, 10);
 }
 
 void b_handle_input(void) {
+  int changed = 0;
+
   if (!client.head) {
     return;
   }
@@ -484,6 +492,8 @@ void b_handle_input(void) {
             if (event.key.keysym.scancode == SDL_SCANCODE_LEFT) {
               client.head->x -= 4;
             }
+
+            changed = 1;
 					}
 				}
 				break;
@@ -491,6 +501,10 @@ void b_handle_input(void) {
 				break;
 		}
 	}
+
+  if (changed) {
+    b_send_player_state(client.head->id, client.head->x, client.head->y);
+  }
 }
 
 int ocsp_resp_cb(SSL *s, void *arg) {

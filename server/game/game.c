@@ -266,8 +266,8 @@ struct b_list_entry* b_list_find(struct b_list *list, int key) {
 int b_connection_set_select(struct b_connection_set *set) {
   struct timeval tv;
 
-  tv.tv_sec = 2;
-  tv.tv_usec = 0;
+  tv.tv_sec = 0;
+  tv.tv_usec = 100000;
 
   return select(set->list.max+1, &(set->fds), NULL, NULL, &tv);
 }
@@ -307,9 +307,9 @@ int b_connection_set_handle(struct b_connection_set *set, unsigned int ready) {
       FD_CLR(connection->s, &(set->fds));
 
       if ((s = b_read_connection(connection, connection->buffer)) > 0) {
-        connection->buffer[BUFSIZE] = 0;
-
-        b_connection_set_broadcast_raw(&connections, connection, connection->buffer, s);
+        //b_connection_set_broadcast_raw(&connections, connection, connection->buffer, s);
+        connection->player.x = ntohs(*((unsigned short*)(connection->buffer+6)));
+        connection->player.y = ntohs(*((unsigned short*)(connection->buffer+8)));
 
         memset(connection->buffer, 0, BUFSIZE+1);
       } else if (s < 0) {
@@ -394,7 +394,7 @@ void b_connection_set_broadcast_raw(struct b_connection_set *set, struct b_conne
   while (entry) {
     connection = (struct b_connection*)(entry->data);
 
-    if ((connection->s != listener.s) && (connection->s != source->s) &&
+    if ((connection->s != listener.s) && ((!source) || (connection->s != source->s)) &&
         ((len = SSL_write(connection->ssl, buffer, len)) <= 0)) {
 
     }
@@ -456,14 +456,62 @@ void b_player_create(struct b_connection *connection) {
   free(data);
 }
 
+void b_player_update(unsigned int id, unsigned short x, unsigned short y) {
+  struct b_list_entry *entry = connections.list.head;
+
+  while ((entry) && (((struct b_connection*)(entry->data))->player.id != id)) {
+    entry = entry->next;
+  }
+
+  if (entry) {
+    ((struct b_connection*)(entry->data))->player.x = x;
+    ((struct b_connection*)(entry->data))->player.y = y;
+  }
+}
+
+void b_player_buffer_update(void) {
+  int i = 0, len = 6+((connections.list.size-1)*8);
+  char *data = calloc(1, len);
+  struct b_list_entry *entry = connections.list.head;
+  struct b_player *player = NULL;
+
+  // add the header
+  strcpy(data, PLAYER_UPDATE);
+
+  // add # of players
+  *((unsigned int*)(data+i+2)) = htonl((unsigned int)(connections.list.size-1));
+
+  // add the player data
+  while (entry) {
+    if (entry->key == listener.s) {
+      entry = entry->next;
+      continue;
+    }
+
+    player = &(((struct b_connection*)(entry->data))->player);
+
+    *((unsigned int*)(data+i+6)) = htonl(player->id);
+    *((unsigned short*)(data+i+10)) = htons(player->x);
+    *((unsigned short*)(data+i+12)) = htons(player->y);
+
+    i += 8;
+
+    entry = entry->next;
+  }
+
+  b_connection_set_broadcast_raw(&connections, NULL, data, len);
+
+  free(data);
+}
+
 void b_player_destroy(struct b_connection *connection) {
-  char *data = (char*)calloc(1, 7);
+  char *data = (char*)calloc(1, 6);
 
   strcpy(data, PLAYER_REMOVE);
 
   *((unsigned int*)(data+2)) = htonl(connection->player.id);
 
-  b_connection_set_broadcast_raw(&connections, connection, data, 7);
+  b_connection_set_broadcast_raw(&connections, connection, data, 6);
 
   free(data);
 }
